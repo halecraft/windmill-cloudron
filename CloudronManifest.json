@@ -7,14 +7,6 @@
   "tagline": "Open-source developer platform to build production-grade workflows and UIs from scripts.",
   "healthCheckPath": "/",
   "httpPort": 8000,
-  "tcpPorts": {
-    "EMAIL_TRIGGER": {
-      "title": "Email Trigger Port",
-      "description": "Port for Windmill email triggers",
-      "defaultValue": 25,
-      "containerPort": 2525
-    }
-  },
   "addons": {
     "postgresql": {},
     "localstorage": {},
