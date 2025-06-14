@@ -1,0 +1,34 @@
+{
+  "id": "com.windmill-labs.cloudronapp",
+  "title": "Windmill",
+  "author": "Windmill Labs <contact@windmill.dev>",
+  "version": "1.0.0-cloudron1",
+  "description": "file://DESCRIPTION.md",
+  "tagline": "Open-source developer platform to build production-grade workflows and UIs from scripts.",
+  "healthCheckPath": "/",
+  "httpPort": 8000,
+  "tcpPorts": {
+    "EMAIL_TRIGGER": {
+      "title": "Email Trigger Port",
+      "description": "Port for Windmill email triggers",
+      "defaultValue": 25,
+      "containerPort": 2525
+    }
+  },
+  "addons": {
+    "postgresql": {},
+    "localstorage": {},
+    "oidc": {
+      "loginRedirectUri": "/oauth/callback",
+      "scopes": "openid profile email"
+    }
+  },
+  "manifestVersion": 2,
+  "website": "https://www.windmill.dev/",
+  "contactEmail": "contact@windmill.dev",
+  "icon": "file://icon.png",
+  "tags": ["developer tools", "automation", "workflow"],
+  "memoryLimit": 2147483648,
+  "minBoxVersion": "7.4.0",
+  "postInstallMessage": "Windmill has been installed!\n\nDefault superadmin credentials (use these for the first login, even if SSO is configured):\n*   **Username:** `admin@windmill.dev`\n*   **Password:** `changeme`\n\nAccess Windmill at [$CLOUDRON_APP_ORIGIN]($CLOUDRON_APP_ORIGIN).\n\nAfter the first login, you will be prompted to create a new superadmin account and workspace. You can then configure OIDC for SSO if desired under instance settings."
+}

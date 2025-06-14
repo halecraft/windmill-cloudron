@@ -1,0 +1,17 @@
+{
+    # Global Caddy options can be set here if needed
+    # admin off
+}
+
+http://:{$INTERNAL_CADDY_HTTP_LISTEN_PORT} {
+    log {
+        output stdout
+        format console
+    }
+
+    # Proxy LSP websocket and related traffic
+    reverse_proxy /ws/* {$LSP_SERVER_INTERNAL_ADDR}
+
+    # Proxy all other traffic to Windmill server
+    reverse_proxy /* {$WINDMILL_SERVER_INTERNAL_ADDR}
+}
