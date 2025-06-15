@@ -4,14 +4,6 @@ set -eu
 # Set up internal addresses and ports
 export WINDMILL_SERVER_INTERNAL_ADDR="127.0.0.1:8001"
 export LSP_SERVER_INTERNAL_ADDR="127.0.0.1:3002"
-export INTERNAL_CADDY_HTTP_LISTEN_PORT="${CLOUDRON_HTTP_PORT:-8000}"
-
-# Wait for PostgreSQL to be available
-echo "Waiting for PostgreSQL to be available..."
-until pg_isready -h "$CLOUDRON_POSTGRESQL_HOST" -p "$CLOUDRON_POSTGRESQL_PORT" -U "$CLOUDRON_POSTGRESQL_USERNAME"; do
-    sleep 2
-done
-echo "PostgreSQL is available."
 
 # First run initialization
 if [[ ! -f /app/data/.initialized_windmill ]]; then

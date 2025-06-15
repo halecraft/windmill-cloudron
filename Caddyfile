@@ -3,7 +3,7 @@
     # admin off
 }
 
-http://:{$INTERNAL_CADDY_HTTP_LISTEN_PORT} {
+http://:8000 {
     log {
         output stdout
         format console
