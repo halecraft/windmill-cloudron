@@ -13,14 +13,15 @@
     "oidc": {
       "loginRedirectUri": "/oauth/callback",
       "scopes": "openid profile email"
-    }
+    },
+    "docker": {}
   },
   "manifestVersion": 2,
   "website": "https://www.windmill.dev/",
   "contactEmail": "contact@windmill.dev",
   "icon": "file://icon.png",
   "tags": ["developer tools", "automation", "workflow"],
-  "memoryLimit": 2147483648,
+  "memoryLimit": 4294967296,
   "minBoxVersion": "7.4.0",
-  "postInstallMessage": "Windmill has been installed!\n\nDefault superadmin credentials (use these for the first login, even if SSO is configured):\n*   **Username:** `admin@windmill.dev`\n*   **Password:** `changeme`\n\nAccess Windmill at [$CLOUDRON_APP_ORIGIN]($CLOUDRON_APP_ORIGIN).\n\nAfter the first login, you will be prompted to create a new superadmin account and workspace. You can then configure OIDC for SSO if desired under instance settings."
+  "postInstallMessage": "Windmill has been installed!\n\nDefault superadmin credentials (use these for the first login, even if SSO is configured):\n*   **Username:** `admin@windmill.dev`\n*   **Password:** `changeme`\n\nAccess Windmill at [$CLOUDRON_APP_ORIGIN]($CLOUDRON_APP_ORIGIN).\n\nAfter the first login, you will be prompted to create a new superadmin account and workspace. You can then configure OIDC for SSO if desired under instance settings.\n\n**Note:** This app requires Cloudron superadmin privileges to install and run, due to the use of the docker addon for LSP and worker containerization."
 }

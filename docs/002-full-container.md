@@ -23,6 +23,8 @@ The goal is to build a single Docker image based on `cloudron/base:4.2.0` that i
 
 ## 3. Dockerfile Enhancements
 
+**Actionable Recommendations Incorporated:**
+
 1.  **Base Image & Initial Setup:**
     ```dockerfile
     FROM cloudron/base:4.2.0
@@ -84,6 +86,11 @@ The goal is to build a single Docker image based on `cloudron/base:4.2.0` that i
         chown -R cloudron:cloudron /app/data /run/windmill /tmp /app/code/windmill
     CMD ["/app/code/start.sh"]
     ```
+
+**Notes:**
+- The outdated TODO about LSP binaries is now removed.
+- No LSP-specific dependencies or binaries are included in the main image.
+- Only the Windmill binary is acquired and installed in the main image.
 
 ## 4. Updating `start.sh`
 
