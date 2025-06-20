@@ -8,7 +8,6 @@
   "healthCheckPath": "/",
   "httpPort": 8000,
   "addons": {
-    "postgresql": {},
     "localstorage": {},
     "oidc": {
       "loginRedirectUri": "/oauth/callback",

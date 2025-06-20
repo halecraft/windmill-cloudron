@@ -14,13 +14,73 @@ caddy version || true
 echo "=== Diagnostic: Caddyfile permissions ==="
 ls -l /app/code/Caddyfile || true
 
+# PostgreSQL configuration
+PGDATA="/app/data/postgresql"
+DB_NAME="windmill"
+DB_USER="windmill_admin"
+DB_PASSWORD="windmill_secure_$(openssl rand -hex 16)"
+
 # Set up internal addresses and ports
 export WINDMILL_SERVER_INTERNAL_ADDR="127.0.0.1:8001"
 export LSP_SERVER_INTERNAL_ADDR="windmill-lsp-service:3001"
 
+# Set database connection URL for Windmill
+export DATABASE_URL="postgres://$DB_USER:$DB_PASSWORD@127.0.0.1:5432/$DB_NAME"
+
 # Ensure lsp_cache directory exists and is owned by cloudron
 mkdir -p /app/data/lsp_cache
 chown -R cloudron:cloudron /app/data/lsp_cache
+
+# PostgreSQL initialization
+echo "=== PostgreSQL Setup ==="
+echo "PostgreSQL data directory: $PGDATA"
+echo "Checking if /app/data exists..."
+ls -la /app/data/ || echo "/app/data does not exist"
+
+if [ ! -f "$PGDATA/PG_VERSION" ]; then
+    echo "Initializing PostgreSQL database..."
+    
+    # Ensure PostgreSQL data directory exists and is owned by postgres user
+    echo "Creating PostgreSQL data directory..."
+    mkdir -p /app/data/postgresql
+    echo "Setting ownership of PostgreSQL data directory..."
+    chown -R postgres:postgres /app/data/postgresql
+    echo "PostgreSQL directory created and ownership set."
+    ls -la /app/data/postgresql || echo "Failed to list PostgreSQL directory"
+    
+    # Initialize PostgreSQL
+    gosu postgres /usr/lib/postgresql/14/bin/initdb -D "$PGDATA" --auth-local=trust --auth-host=md5
+    
+    # Configure PostgreSQL
+    echo "host all all 127.0.0.1/32 md5" >> "$PGDATA/pg_hba.conf"
+    echo "local all all trust" >> "$PGDATA/pg_hba.conf"
+    echo "listen_addresses = '127.0.0.1'" >> "$PGDATA/postgresql.conf"
+    echo "port = 5432" >> "$PGDATA/postgresql.conf"
+    
+    # Start PostgreSQL temporarily for setup
+    echo "Starting PostgreSQL for initial setup..."
+    gosu postgres /usr/lib/postgresql/14/bin/pg_ctl -D "$PGDATA" -o "-c listen_addresses='127.0.0.1' -c port=5432" -w start
+    
+    # Wait for PostgreSQL to be ready
+    sleep 3
+    
+    # Create user and database
+    echo "Creating database user and database..."
+    gosu postgres /usr/lib/postgresql/14/bin/psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD' SUPERUSER;"
+    gosu postgres /usr/lib/postgresql/14/bin/psql -c "CREATE DATABASE $DB_NAME WITH OWNER $DB_USER;"
+    
+    # Apply Windmill initialization script
+    echo "Applying Windmill database initialization..."
+    gosu postgres /usr/lib/postgresql/14/bin/psql -d "$DB_NAME" -f /app/code/init-db-as-superuser.sql
+    
+    # Stop PostgreSQL to restart it properly via supervisord
+    echo "Stopping PostgreSQL temporary instance..."
+    gosu postgres /usr/lib/postgresql/14/bin/pg_ctl -D "$PGDATA" -m fast -w stop
+    
+    echo "PostgreSQL initialization complete."
+else
+    echo "PostgreSQL data directory already exists, skipping initialization."
+fi
 
 # First run initialization
 if [[ ! -f /app/data/.initialized_windmill ]]; then

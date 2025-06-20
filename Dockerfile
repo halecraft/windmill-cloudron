@@ -1,6 +1,9 @@
 FROM cloudron/base:4.2.0
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV UV_PYTHON_INSTALL_DIR=/tmp/windmill/cache/py_runtime
+ENV UV_PYTHON_PREFERENCE=only-managed
+ENV UV_TOOL_BIN_DIR=/usr/local/bin
 
 # Install base dependencies
 RUN apt-get update && \
@@ -10,6 +13,8 @@ RUN apt-get update && \
         curl \
         ca-certificates \
         wget \
+        postgresql \
+        postgresql-contrib \
         postgresql-client \
         gnupg \
         apt-transport-https \
@@ -28,6 +33,12 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs
 RUN apt-get install -y python3.11 python3-pip python3.11-venv
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+
+# Install uv (matching the method in upstream Windmill Dockerfile)
+RUN curl --proto '=https' --tlsv1.2 -LsSf https://github.com/astral-sh/uv/releases/download/0.6.2/uv-installer.sh | sh && \
+    mv /root/.local/bin/uv /usr/local/bin/uv && \
+    chmod +x /usr/local/bin/uv
+
 RUN curl -fsSL https://deno.land/x/install/install.sh | sh && \
     cp /root/.deno/bin/deno /usr/local/bin/
 # Install Docker CLI (docker-ce-cli)
@@ -45,7 +56,7 @@ RUN export ARCH=$(dpkg --print-architecture) && \
 RUN apt-get update && apt-get install -y docker-ce-cli
 
 # Create necessary directories
-RUN mkdir -p /app/code/windmill /app/data /run/windmill /tmp/data /app/data/lsp_cache /app/data/windmill_index
+RUN mkdir -p /app/code/windmill /app/data /run/windmill /tmp/data /app/data/lsp_cache /app/data/windmill_index /app/data/postgresql /tmp/windmill/cache/py_runtime
 
 # Acquire Windmill core binary
 ARG WINDMILL_VERSION=v1.496.3
@@ -59,10 +70,12 @@ RUN ARCH="${WINDMILL_ARCH:-$(dpkg --print-architecture)}" && \
 COPY start.sh /app/code/start.sh
 COPY supervisord.conf /etc/supervisor/conf.d/windmill.conf
 COPY Caddyfile /app/code/Caddyfile
+COPY windmill/init-db-as-superuser.sql /app/code/init-db-as-superuser.sql
 
 # Set permissions
 RUN chmod +x /app/code/start.sh && \
-    chown -R cloudron:cloudron /app/data /run/windmill /tmp /app/code/windmill
+    chown -R cloudron:cloudron /app/data /run/windmill /tmp /app/code/windmill && \
+    chown -R postgres:postgres /app/data/postgresql
 
 # Set entrypoint
 CMD ["/app/code/start.sh"]
