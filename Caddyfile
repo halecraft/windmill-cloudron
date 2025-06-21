@@ -9,9 +9,26 @@ http://:8000 {
         format console
     }
 
-    # Proxy LSP websocket and related traffic
-    reverse_proxy /ws/* {$LSP_SERVER_INTERNAL_ADDR}
+    # Set maximum request body size to 250MB for file uploads
+    request_body {
+        max_size 250MB
+    }
 
-    # Proxy all other traffic to Windmill server
-    reverse_proxy /* {$WINDMILL_SERVER_INTERNAL_ADDR}
+    # Proxy LSP websocket and related traffic
+    reverse_proxy /ws/* {$LSP_SERVER_INTERNAL_ADDR} {
+        transport http {
+            read_timeout 300s
+            write_timeout 300s
+            dial_timeout 30s
+        }
+    }
+
+    # Proxy all other traffic to Windmill server with extended timeouts for file uploads
+    reverse_proxy /* {$WINDMILL_SERVER_INTERNAL_ADDR} {
+        transport http {
+            read_timeout 300s
+            write_timeout 300s
+            dial_timeout 30s
+        }
+    }
 }
