@@ -18,7 +18,18 @@ ls -l /app/code/Caddyfile || true
 PGDATA="/app/data/postgresql"
 DB_NAME="windmill"
 DB_USER="windmill_admin"
-DB_PASSWORD="windmill_secure_$(openssl rand -hex 16)"
+
+# Use stored password if it exists, otherwise generate a new one
+PASSWORD_FILE="/app/data/.db_password"
+if [ -f "$PASSWORD_FILE" ]; then
+    DB_PASSWORD=$(cat "$PASSWORD_FILE")
+    echo "Using existing database password from $PASSWORD_FILE"
+else
+    DB_PASSWORD="windmill_secure_$(openssl rand -hex 16)"
+    echo "$DB_PASSWORD" > "$PASSWORD_FILE"
+    chmod 600 "$PASSWORD_FILE"
+    echo "Generated new database password and stored in $PASSWORD_FILE"
+fi
 
 # Set up internal addresses and ports
 export WINDMILL_SERVER_INTERNAL_ADDR="127.0.0.1:8001"
