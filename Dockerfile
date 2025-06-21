@@ -39,9 +39,16 @@ RUN curl --proto '=https' --tlsv1.2 -LsSf https://github.com/astral-sh/uv/releas
     mv /root/.local/bin/uv /usr/local/bin/uv && \
     chmod +x /usr/local/bin/uv
 
+# Install Deno
 RUN curl -fsSL https://deno.land/x/install/install.sh | sh && \
     cp /root/.deno/bin/deno /usr/local/bin/ && \
     ln -s /usr/local/bin/deno /usr/bin/deno
+
+# Install Bun
+RUN curl -fsSL https://bun.sh/install | bash && \
+    cp /root/.bun/bin/bun /usr/local/bin/ && \
+    ln -s /usr/local/bin/bun /usr/bin/bun
+
 # Install Docker CLI (docker-ce-cli)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
