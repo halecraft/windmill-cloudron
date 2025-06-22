@@ -1,19 +1,6 @@
 #!/bin/bash
 set -euxo pipefail
 
-echo "=== Diagnostic: uname -a ==="
-uname -a
-echo "=== Diagnostic: arch ==="
-arch
-echo "=== Diagnostic: /app/code contents ==="
-ls -l /app/code || true
-echo "=== Diagnostic: Caddy binary location ==="
-which caddy || true
-echo "=== Diagnostic: Caddy version ==="
-caddy version || true
-echo "=== Diagnostic: Caddyfile permissions ==="
-ls -l /app/code/Caddyfile || true
-
 # PostgreSQL configuration
 PGDATA="/app/data/postgresql"
 DB_NAME="windmill"
