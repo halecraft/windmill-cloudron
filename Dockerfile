@@ -78,7 +78,9 @@ RUN ARCH="${WINDMILL_ARCH:-$(dpkg --print-architecture)}" && \
 COPY start.sh /app/code/start.sh
 COPY supervisord.conf /etc/supervisor/conf.d/windmill.conf
 COPY Caddyfile /app/code/Caddyfile
-COPY windmill/init-db-as-superuser.sql /app/code/init-db-as-superuser.sql
+RUN curl -LsSf \
+    https://raw.githubusercontent.com/windmill-labs/windmill/main/init-db-as-superuser.sql \
+    -o /app/code/init-db-as-superuser.sql
 
 # Set permissions
 RUN chmod +x /app/code/start.sh && \
