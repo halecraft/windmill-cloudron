@@ -93,6 +93,14 @@ if [[ ! -f /app/data/.initialized_windmill ]]; then
     echo "Initialization complete."
 fi
 
+# Ensure SMTP env vars have fallback values for supervisord %(ENV_...)s syntax
+# (supervisord crashes if referenced env vars are missing)
+export CLOUDRON_MAIL_SMTP_SERVER="${CLOUDRON_MAIL_SMTP_SERVER:-}"
+export CLOUDRON_MAIL_SMTP_PORT="${CLOUDRON_MAIL_SMTP_PORT:-587}"
+export CLOUDRON_MAIL_SMTP_USERNAME="${CLOUDRON_MAIL_SMTP_USERNAME:-}"
+export CLOUDRON_MAIL_SMTP_PASSWORD="${CLOUDRON_MAIL_SMTP_PASSWORD:-}"
+export CLOUDRON_MAIL_FROM="${CLOUDRON_MAIL_FROM:-}"
+
 # Handle custom CA certificates if present
 if [ -d /app/data/ca-certs ] && compgen -G "/app/data/ca-certs/*.crt" > /dev/null; then
     echo "Installing custom CA certificates..."

@@ -12,9 +12,10 @@
   "addons": {
     "localstorage": {},
     "oidc": {
-      "loginRedirectUri": "/oauth/callback",
+      "loginRedirectUri": "/user/login_callback/cloudron",
       "scopes": "openid profile email"
     },
+    "sendmail": {},
     "docker": {}
   },
   "manifestVersion": 2,

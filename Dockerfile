@@ -351,6 +351,7 @@ RUN find ${APP} /tmp/windmill -type d -exec chmod 777 {} +
 # Cloudron-specific files
 # ---------------------------------------------------------------------------
 COPY start.sh /app/code/start.sh
+COPY inject-credentials.sh /app/code/inject-credentials.sh
 COPY supervisord.conf /etc/supervisor/conf.d/windmill.conf
 COPY Caddyfile /app/code/Caddyfile
 COPY windmill/init-db-as-superuser.sql /app/code/init-db-as-superuser.sql
@@ -360,7 +361,7 @@ COPY windmill/init-db-as-superuser.sql /app/code/init-db-as-superuser.sql
 # ---------------------------------------------------------------------------
 RUN mkdir -p /app/data/postgresql
 
-RUN chmod +x /app/code/start.sh && \
+RUN chmod +x /app/code/start.sh /app/code/inject-credentials.sh && \
     chown -R cloudron:cloudron /app/data && \
     chown -R postgres:postgres /app/data/postgresql
 
