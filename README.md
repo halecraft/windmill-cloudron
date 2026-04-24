@@ -1,108 +1,130 @@
 # Windmill for Cloudron
 
-An **unofficial** Cloudron package for [Windmill](https://www.windmill.dev/) - the open-source developer platform for building internal tools, APIs, background jobs, workflows and UIs.
+An **unofficial** Cloudron package for [Windmill](https://www.windmill.dev/) — the open-source developer platform for building internal tools, APIs, background jobs, workflows, and UIs.
 
-Windmill turns scripts into shareable UIs automatically and allows you to compose them into flows or build richer apps with low-code. It supports Python, TypeScript, Go, Bash, SQL, and GraphQL scripts.
+Windmill turns scripts into shareable UIs automatically and lets you compose them into flows or build richer apps with low-code. It supports Python, TypeScript, Go, Bash, SQL, and GraphQL.
 
-## 🚀 Getting Started
+## Getting Started
 
-### Installation
+### Build & Install
 
-Use the `cloudron` CLI to install, e.g.
-  - `cloudron build`, then
-  - `cloudron install --image docker.yourregistry.com/windmill -l windmill`
+```sh
+cloudron build
+cloudron install -l windmill
+```
+
+> **Do NOT pass `--no-sso`** unless you specifically want to disable Cloudron SSO. The default install provisions OIDC automatically — no manual configuration needed.
 
 ### First Login
 
-After installation, access your Windmill instance at your configured domain:
-
-- **Default superadmin credentials**:
+- **Default superadmin credentials:**
   - Username: `admin@windmill.dev`
   - Password: `changeme`
 
-⚠️ **Important**: Change these credentials immediately after first login!
+⚠️ **Change these credentials immediately after first login.**
+
+Even with SSO enabled, use these credentials for the initial login to complete the setup wizard (create a new superadmin account and your first workspace). After that, use the **Cloudron** SSO button on the login page.
 
 ### Initial Setup
 
-1. **Create your workspace**: Follow the setup wizard to create your first workspace
-2. **Add users**: Invite team members or configure SSO (see technical details below)
-3. **Start building**: Create your first script or import from [Windmill Hub](https://hub.windmill.dev)
+1. **Create your workspace** — the setup wizard walks you through this
+2. **Add users** — Cloudron SSO is automatic; users can also be invited manually
+3. **Start building** — create your first script or import from [Windmill Hub](https://hub.windmill.dev)
 
-### Quick Start Example
+## Architecture
 
-1. Go to **Scripts** → **+ New Script**
-2. Choose **Python** or **TypeScript**
-3. Write a simple script:
-   ```python
-   def main(name: str = "World"):
-       return f"Hello {name}!"
-   ```
-4. Click **Save & Run** - Windmill automatically generates a UI for your script!
+This package runs Windmill as a single container with 6 supervised processes:
 
-## 🔧 Technical Details for Cloudron Admins
+| Process | Role |
+|---|---|
+| **PostgreSQL 16** | Embedded database (required — see [TECHNICAL.md](TECHNICAL.md) for why) |
+| **Caddy** | Reverse proxy — routes `/ws/*` to LSP, everything else to windmill-server |
+| **windmill-server** | API server and frontend (port 8001 internally) |
+| **windmill-worker** | Script execution (default worker group) |
+| **windmill-worker-native** | Lightweight jobs — REST, SQL, etc. (native group, 8 workers) |
+| **credential-inject** | One-shot — injects OIDC and SMTP credentials into the database on boot |
 
-### Architecture
+**LSP** (code intelligence for the editor) runs as a separate Docker sidecar container, managed via Cloudron's `docker` addon.
 
-This Cloudron package includes:
-- **Windmill server** and **worker** processes managed by supervisord
-- **PostgreSQL** database (self-managed, not using Cloudron's PostgreSQL addon due to Cloudron limitations)
-- **Caddy** reverse proxy for internal routing
-- **LSP container** for code intelligence (Python, TypeScript, etc.)
+### What's Included
+
+- **Automatic Cloudron SSO** — OIDC credentials are injected on every boot; the "Cloudron" login button appears automatically
+- **Automatic email** — Cloudron's SMTP infrastructure is configured on every boot; email notifications work out of the box
+- **No artificial limits** — workspace, group, and SSO user caps are removed via patches
+- **Full OAuth login flow** — restored from the open-source `windmill-oauth` crate
+- **Audit logging** — restored for compliance and debugging
+- **User management** — setup wizard, password management, and workspace auto-invite all work
+
+### Runtime Support
+
+| Runtime | Version |
+|---|---|
+| Python | 3.12 (primary), 3.11 |
+| Node.js | 20 |
+| Deno | 2.2 |
+| Bun | 1.3 |
+| Go | 1.26 |
+| PHP | 8.3 |
+| Docker CLI | Available for containerized jobs |
+
+Package management: `uv` (Python), `npm` (Node.js), `composer` (PHP).
 
 ### Resource Requirements
 
-- **Minimum**: 2GB RAM, 2 CPU cores
-- **Recommended**: 4GB RAM, 4 CPU cores
-- **Storage**: Grows with your scripts, flows, and job logs
+- **Minimum:** 2 GB RAM, 2 CPU cores
+- **Recommended:** 4 GB RAM, 4 CPU cores
+- **Memory limit:** 4 GB (set in `CloudronManifest.json`)
+- **Storage:** grows with scripts, flows, job logs, and the embedded database
 
-### Security & Isolation
+## What's Patched
 
-- Scripts run in **sandboxed environments** using nsjail
-- **Docker addon** is required for worker containerization and LSP services
-- All secrets and credentials are **encrypted** in the database
-- **OIDC/SSO** support available through Cloudron's OIDC addon
+This package applies 8 patches to the Windmill OSS source to restore functionality that was moved behind the Enterprise Edition paywall in June 2025:
 
-### Backup Considerations
+| Patch | What it does |
+|---|---|
+| `001-remove-limits` | Removes workspace (2) and group (3) caps |
+| `002-restore-oauth` | Restores OAuth login flow; removes SSO user limit (10) |
+| `003-restore-audit-logs` | Restores audit log recording and querying |
+| `004-implement-email` | Implements email sending via SMTP |
+| `005-remove-sso-limit-banner` | Removes misleading "Limited to 10 SSO users" frontend banner |
+| `006-fix-openrouter-default-model` | Fixes default AI model for OpenRouter |
+| `007-implement-user-mgmt` | Restores user creation, password hashing, setup wizard |
+| `008-implement-workspace-auto-invite` | Restores workspace auto-invite settings |
 
-Your Windmill data includes:
-- **Database**: All scripts, flows, schedules, and job history
-- **Local storage**: File uploads, custom certificates, cache data
+See [`patches/README.md`](patches/README.md) for detailed descriptions of each patch, and [`TECHNICAL.md`](TECHNICAL.md) for the full patching strategy and rules for writing new patches.
 
-Regular Cloudron backups will capture both the database and local storage.
+## Updating Windmill
 
-### Environment & Runtime Support
+See the [How to Update Windmill](TECHNICAL.md#how-to-update-windmill) section in `TECHNICAL.md` for the full procedure. The short version:
 
-This package includes pre-installed runtimes for:
-- **Python 3.11** with `uv` package manager
-- **Node.js 20** and **npm**
-- **Deno** runtime
-- **Go** compiler
-- **Docker CLI** for containerized jobs
+1. Update the windmill submodule to the new tag
+2. Re-apply and fix patches
+3. Update `upstreamVersion` in `CloudronManifest.json`
+4. `cloudron build && cloudron update`
 
-### Networking
+## Backup & Data
 
-- **HTTP Port**: 8000 (automatically configured by Cloudron)
-- **Internal services**: Caddy proxy, PostgreSQL, LSP container
-- **External access**: Only through Cloudron's reverse proxy
+All Windmill data lives under `/app/data/`:
 
-### Monitoring & Logs
+- **`/app/data/postgresql/`** — the embedded PostgreSQL database (scripts, flows, schedules, job history, settings)
+- **`/app/data/lsp_cache/`** — LSP cache for code intelligence
 
-- **Application logs**: Available through Cloudron's log viewer
-- **Job execution logs**: Visible within Windmill's web interface
-- **Health checks**: Automatic health monitoring via Cloudron
+Cloudron's backup system captures everything under `/app/data/` automatically.
 
-### Scaling Considerations
+## Known Limitations
 
-- **Single-instance**: This package runs all components in one container
-- **Worker scaling**: Additional workers can be configured through Windmill's settings
-- **Database**: PostgreSQL runs locally; for high-load scenarios, consider external database
+- **No nsjail sandbox** — Cloudron provides container-level isolation instead
+- **Single-instance only** — no HA or multi-node workers
+- **No multiplayer editing** (Enterprise Edition only)
+- **No Git sync, SAML SSO, S3 helpers, external triggers, or OpenTelemetry** (Enterprise Edition)
 
-## 📝 License & Support
+See [Known Limitations](TECHNICAL.md#known-limitations) in `TECHNICAL.md` for the complete list.
 
-- **Windmill**: AGPLv3 (Community Edition)
-- **This Cloudron package**: MIT
+## License
 
-## 🤝 Contributing
+- **Windmill:** [AGPLv3](https://github.com/windmill-labs/windmill/blob/main/LICENSE) (Community Edition)
+- **This Cloudron package:** [MIT](LICENSE)
 
-This is an unofficial package. For issues specific to the Cloudron packaging, please check the package repository. For Windmill core issues, use the [official Windmill repository](https://github.com/windmill-labs/windmill).
+## Contributing
 
+This is an unofficial package. For issues specific to the Cloudron packaging, please open an issue in this repository. For Windmill core issues, use the [official Windmill repository](https://github.com/windmill-labs/windmill).
