@@ -1,1 +1,7 @@
-best
+.jj-plan
+.jj
+.env
+.DS_Store
+*.swp
+*.swo
+*~
