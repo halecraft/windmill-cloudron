@@ -1,0 +1,20 @@
+# Version control
+.jj
+.jj-plan
+
+# Git: exclude everything except the submodule's git object store
+# (needed by the patcher stage for version embedding and git apply)
+.git
+!.git/modules/windmill
+
+# Documentation (not needed in build context)
+docs
+*.md
+!DESCRIPTION.md
+
+# Editor / OS artifacts
+.env
+.DS_Store
+*.swp
+*.swo
+*~

@@ -47,7 +47,7 @@ if [ ! -f "$PGDATA/PG_VERSION" ]; then
     ls -la /app/data/postgresql || echo "Failed to list PostgreSQL directory"
     
     # Initialize PostgreSQL
-    gosu postgres /usr/lib/postgresql/14/bin/initdb -D "$PGDATA" --auth-local=trust --auth-host=md5
+    gosu postgres /usr/lib/postgresql/16/bin/initdb -D "$PGDATA" --auth-local=trust --auth-host=md5
     
     # Configure PostgreSQL
     echo "host all all 127.0.0.1/32 md5" >> "$PGDATA/pg_hba.conf"
@@ -57,23 +57,23 @@ if [ ! -f "$PGDATA/PG_VERSION" ]; then
     
     # Start PostgreSQL temporarily for setup
     echo "Starting PostgreSQL for initial setup..."
-    gosu postgres /usr/lib/postgresql/14/bin/pg_ctl -D "$PGDATA" -o "-c listen_addresses='127.0.0.1' -c port=5432" -w start
+    gosu postgres /usr/lib/postgresql/16/bin/pg_ctl -D "$PGDATA" -o "-c listen_addresses='127.0.0.1' -c port=5432" -w start
     
     # Wait for PostgreSQL to be ready
     sleep 3
     
     # Create user and database
     echo "Creating database user and database..."
-    gosu postgres /usr/lib/postgresql/14/bin/psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD' SUPERUSER;"
-    gosu postgres /usr/lib/postgresql/14/bin/psql -c "CREATE DATABASE $DB_NAME WITH OWNER $DB_USER;"
+    gosu postgres /usr/lib/postgresql/16/bin/psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASSWORD' SUPERUSER;"
+    gosu postgres /usr/lib/postgresql/16/bin/psql -c "CREATE DATABASE $DB_NAME WITH OWNER $DB_USER;"
     
     # Apply Windmill initialization script
     echo "Applying Windmill database initialization..."
-    gosu postgres /usr/lib/postgresql/14/bin/psql -d "$DB_NAME" -f /app/code/init-db-as-superuser.sql
+    gosu postgres /usr/lib/postgresql/16/bin/psql -d "$DB_NAME" -f /app/code/init-db-as-superuser.sql
     
     # Stop PostgreSQL to restart it properly via supervisord
     echo "Stopping PostgreSQL temporary instance..."
-    gosu postgres /usr/lib/postgresql/14/bin/pg_ctl -D "$PGDATA" -m fast -w stop
+    gosu postgres /usr/lib/postgresql/16/bin/pg_ctl -D "$PGDATA" -m fast -w stop
     
     echo "PostgreSQL initialization complete."
 else
@@ -108,25 +108,40 @@ echo "Permissions set, proceeding to LSP container management..."
 set +e
 echo "=== Entering LSP container management block ==="
 
-# Start or ensure LSP container is running
+# LSP container management with lock file to prevent race conditions
 LSP_CONTAINER_NAME="windmill-lsp-service"
 LSP_IMAGE="ghcr.io/windmill-labs/windmill-lsp:latest"
 LSP_PORT=3001
 LSP_CACHE_PATH="/app/data/lsp_cache"
 LSP_CACHE_TARGET="/pyls/.cache"
+LOCK_FILE="/app/data/lsp_management.lock"
 
 # Use Cloudron's Docker host
 DOCKER="docker --host \"${CLOUDRON_DOCKER_HOST:-unix:///var/run/docker.sock}\""
 
-# Check if container is running
-if ! eval $DOCKER ps --format '{{.Names}}' | grep -q "^${LSP_CONTAINER_NAME}\$"; then
-    echo "Starting LSP container: $LSP_CONTAINER_NAME"
-    # Remove any stopped container with the same name
-    if eval $DOCKER ps -a --format '{{.Names}}' | grep -q "^${LSP_CONTAINER_NAME}\$"; then
-        eval $DOCKER rm -f "$LSP_CONTAINER_NAME"
+# Acquire lock (with stale lock detection via PID check)
+if [ -f "$LOCK_FILE" ]; then
+    OLD_PID=$(cat "$LOCK_FILE" 2>/dev/null)
+    if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null; then
+        echo "LSP management already in progress (PID $OLD_PID), skipping."
+        # Jump past the LSP block
+    else
+        echo "Removing stale lock file (PID $OLD_PID no longer running)."
+        rm -f "$LOCK_FILE"
     fi
-    # Pull latest image
-    eval $DOCKER pull "$LSP_IMAGE"
+fi
+
+if [ ! -f "$LOCK_FILE" ]; then
+    echo $$ > "$LOCK_FILE"
+    # Trap to clean up lock file on exit
+    trap 'rm -f "$LOCK_FILE"' EXIT
+
+    echo "Stopping and removing existing LSP container (if any)..."
+    eval $DOCKER rm -f "$LSP_CONTAINER_NAME" 2>/dev/null || true
+
+    echo "Pulling latest LSP image..."
+    eval $DOCKER pull "$LSP_IMAGE" || echo "Warning: Failed to pull LSP image, will use cached version if available"
+
     # Get the current container's network
     NETWORK=$(
         eval $DOCKER network ls --filter "name=cloudron" --format '{{.Name}}' | head -n1
@@ -134,7 +149,8 @@ if ! eval $DOCKER ps --format '{{.Names}}' | grep -q "^${LSP_CONTAINER_NAME}\$";
     if [ -z "$NETWORK" ]; then
         NETWORK="bridge"
     fi
-    # Start the LSP container
+
+    echo "Starting LSP container: $LSP_CONTAINER_NAME"
     eval $DOCKER run -d \
         --name "$LSP_CONTAINER_NAME" \
         --network "$NETWORK" \
@@ -143,12 +159,18 @@ if ! eval $DOCKER ps --format '{{.Names}}' | grep -q "^${LSP_CONTAINER_NAME}\$";
         -e XDG_CACHE_HOME="${LSP_CACHE_TARGET}" \
         --restart always \
         "$LSP_IMAGE"
-else
-    echo "LSP container already running."
+
+    rm -f "$LOCK_FILE"
+    # Remove the EXIT trap since we cleaned up manually
+    trap - EXIT
 fi
 
 echo "=== Exiting LSP container management block ==="
 set -e
+
+# Create runtime directories
+mkdir -p /run/windmill
+chown cloudron:cloudron /run/windmill
 
 # Start supervisord
 echo "Starting supervisord..."
