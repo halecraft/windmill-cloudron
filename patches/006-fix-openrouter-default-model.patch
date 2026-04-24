@@ -1,0 +1,13 @@
+diff --git a/frontend/src/lib/components/copilot/lib.ts b/frontend/src/lib/components/copilot/lib.ts
+index e98ff035db..9f9f3437d0 100644
+--- a/frontend/src/lib/components/copilot/lib.ts
++++ b/frontend/src/lib/components/copilot/lib.ts
+@@ -88,7 +88,7 @@ export const AI_PROVIDERS: Record<AIProvider, AIProviderDetails> = {
+ 	},
+ 	openrouter: {
+ 		label: 'OpenRouter',
+-		defaultModels: ['meta-llama/llama-3.2-3b-instruct:free']
++		defaultModels: ['deepseek/deepseek-v4-pro']
+ 	},
+ 	togetherai: {
+ 		label: 'Together AI',

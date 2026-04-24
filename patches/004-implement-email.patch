@@ -1,0 +1,197 @@
+diff --git a/backend/windmill-common/src/email_oss.rs b/backend/windmill-common/src/email_oss.rs
+index 2813ebe458..e5fc1ddaf3 100644
+--- a/backend/windmill-common/src/email_oss.rs
++++ b/backend/windmill-common/src/email_oss.rs
+@@ -5,42 +5,168 @@ pub use crate::email_ee::*;
+ #[cfg(not(feature = "private"))]
+ use crate::server::Smtp;
+ 
++#[cfg(all(feature = "smtp", not(feature = "private")))]
++async fn send_email_inner(
++    subject: &str,
++    content: &str,
++    content_is_html: bool,
++    to: Vec<String>,
++    smtp: Smtp,
++    client_timeout: Option<tokio::time::Duration>,
++) -> crate::error::Result<()> {
++    use mail_send::SmtpClientBuilder;
++
++    if to.is_empty() {
++        return Ok(());
++    }
++
++    let host = smtp.host.as_str();
++    let mut builder = SmtpClientBuilder::new(host, smtp.port);
++
++    if smtp.tls_implicit.unwrap_or(false) {
++        builder = builder.implicit_tls(true);
++    }
++
++    if smtp.disable_tls.unwrap_or(false) {
++        builder = builder.implicit_tls(false);
++        builder = builder.allow_invalid_certs();
++    }
++
++    if let Some(timeout) = client_timeout {
++        builder = builder.timeout(timeout);
++    }
++
++    if let (Some(ref username), Some(ref password)) = (&smtp.username, &smtp.password) {
++        if !username.is_empty() {
++            builder = builder.credentials((username.as_str(), password.as_str()));
++        }
++    }
++
++    let mut message = mail_send::mail_builder::MessageBuilder::new();
++    message = message.from(smtp.from.as_str());
++
++    for recipient in &to {
++        message = message.to(recipient.as_str());
++    }
++
++    message = message.subject(subject);
++
++    if content_is_html {
++        message = message.html_body(content);
++    } else {
++        message = message.text_body(content);
++    }
++
++    let mut client = builder.connect().await.map_err(|e| {
++        crate::error::Error::InternalErr(format!("Failed to connect to SMTP server: {e}"))
++    })?;
++
++    client.send(message).await.map_err(|e: mail_send::Error| {
++        crate::error::Error::InternalErr(format!("Failed to send email: {e}"))
++    })?;
++
++    tracing::info!(
++        to = ?to,
++        subject = %subject,
++        "Email sent successfully"
++    );
++
++    Ok(())
++}
++
+ #[cfg(not(feature = "private"))]
+ pub async fn send_email(
+-    _subject: &str,
+-    _content: &str,
+-    _to: Vec<String>,
+-    _smtp: Smtp,
+-    _client_timeout: Option<tokio::time::Duration>,
++    subject: &str,
++    content: &str,
++    to: Vec<String>,
++    smtp: Smtp,
++    client_timeout: Option<tokio::time::Duration>,
+ ) -> crate::error::Result<()> {
+-    Ok(())
++    #[cfg(feature = "smtp")]
++    {
++        send_email_inner(subject, content, true, to, smtp, client_timeout).await
++    }
++    #[cfg(not(feature = "smtp"))]
++    {
++        let _ = (subject, content, to, smtp, client_timeout);
++        tracing::warn!("Email sending requires the 'smtp' feature to be enabled");
++        Ok(())
++    }
+ }
+ 
+ #[cfg(not(feature = "private"))]
+ pub async fn send_email_html(
+-    _subject: &str,
+-    _content: &str,
+-    _to: Vec<String>,
+-    _smtp: Smtp,
+-    _client_timeout: Option<tokio::time::Duration>,
++    subject: &str,
++    content: &str,
++    to: Vec<String>,
++    smtp: Smtp,
++    client_timeout: Option<tokio::time::Duration>,
+ ) -> crate::error::Result<()> {
+-    Ok(())
++    #[cfg(feature = "smtp")]
++    {
++        send_email_inner(subject, content, true, to, smtp, client_timeout).await
++    }
++    #[cfg(not(feature = "smtp"))]
++    {
++        let _ = (subject, content, to, smtp, client_timeout);
++        tracing::warn!("Email sending requires the 'smtp' feature to be enabled");
++        Ok(())
++    }
+ }
+ 
+ #[cfg(not(feature = "private"))]
+ pub async fn send_email_plain_text(
+-    _subject: &str,
+-    _content: &str,
+-    _to: Vec<String>,
+-    _smtp: Smtp,
+-    _client_timeout: Option<tokio::time::Duration>,
++    subject: &str,
++    content: &str,
++    to: Vec<String>,
++    smtp: Smtp,
++    client_timeout: Option<tokio::time::Duration>,
+ ) -> crate::error::Result<()> {
+-    Ok(())
++    #[cfg(feature = "smtp")]
++    {
++        send_email_inner(subject, content, false, to, smtp, client_timeout).await
++    }
++    #[cfg(not(feature = "smtp"))]
++    {
++        let _ = (subject, content, to, smtp, client_timeout);
++        tracing::warn!("Email sending requires the 'smtp' feature to be enabled");
++        Ok(())
++    }
+ }
+ 
+ #[cfg(not(feature = "private"))]
+-pub fn send_email_if_possible(_subject: &str, _content: &str, _to: &str) {
+-    tracing::warn!(
+-        "send_email_if_possible is not implemented in Windmill's Open Source repository"
+-    );
+-}
++pub fn send_email_if_possible(subject: &str, content: &str, to: &str) {
++    #[cfg(feature = "smtp")]
++    {
++        let subject = subject.to_string();
++        let content = content.to_string();
++        let to = to.to_string();
++        tokio::spawn(async move {
++            let smtp_opt = crate::worker::SMTP_CONFIG.load();
++            let smtp = match smtp_opt.as_ref() {
++                Some(smtp) => smtp.clone(),
++                None => {
++                    tracing::debug!(
++                        "SMTP not configured, skipping email to {to} with subject: {subject}"
++                    );
++                    return;
++                }
++            };
++            if let Err(e) =
++                send_email_inner(&subject, &content, true, vec![to.clone()], smtp, None).await
++            {
++                tracing::error!(
++                    to = %to,
++                    subject = %subject,
++                    error = %e,
++                    "Failed to send email"
++                );
++            }
++        });
++    }
++    #[cfg(not(feature = "smtp"))]
++    {
++        let _ = (subject, content, to);
++        tracing::warn!("send_email_if_possible: smtp feature not enabled");
++    }
++}
+\ No newline at end of file
