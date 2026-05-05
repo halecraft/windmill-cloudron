@@ -62,7 +62,7 @@ WORKDIR /windmill-duckdb-ffi-internal
 RUN apt-get update && apt-get install -y clang=1:14.0-55.* libclang-dev=1:14.0-55.* cmake=3.25.* \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-COPY windmill-fork/backend/windmill-duckdb-ffi-internal .
+COPY windmill/backend/windmill-duckdb-ffi-internal .
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=$SCCACHE_DIR,sharing=locked \
@@ -74,22 +74,22 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 FROM --platform=linux/amd64 node:24-alpine AS frontend
 
 WORKDIR /frontend
-COPY windmill-fork/frontend/package.json windmill-fork/frontend/package-lock.json windmill-fork/frontend/.npmrc ./
-COPY windmill-fork/frontend/scripts/ ./scripts/
+COPY windmill/frontend/package.json windmill/frontend/package-lock.json windmill/frontend/.npmrc ./
+COPY windmill/frontend/scripts/ ./scripts/
 RUN npm ci
 
 # Copy all frontend source
-COPY windmill-fork/frontend .
+COPY windmill/frontend .
 RUN mkdir /backend
-COPY windmill-fork/backend/windmill-api/openapi.yaml /backend/windmill-api/openapi.yaml
-COPY windmill-fork/openflow.openapi.yaml /openflow.openapi.yaml
-COPY windmill-fork/backend/windmill-api/build_openapi.sh /backend/windmill-api/build_openapi.sh
-COPY windmill-fork/system_prompts/auto-generated /system_prompts/auto-generated
+COPY windmill/backend/windmill-api/openapi.yaml /backend/windmill-api/openapi.yaml
+COPY windmill/openflow.openapi.yaml /openflow.openapi.yaml
+COPY windmill/backend/windmill-api/build_openapi.sh /backend/windmill-api/build_openapi.sh
+COPY windmill/system_prompts/auto-generated /system_prompts/auto-generated
 
 RUN cd /backend/windmill-api && . ./build_openapi.sh
-COPY windmill-fork/backend/parsers/windmill-parser-wasm/pkg/ /backend/parsers/windmill-parser-wasm/pkg/
-COPY windmill-fork/typescript-client/docs/ /frontend/static/tsdocs/
-COPY windmill-fork/python-client/docs/ /frontend/static/pydocs/
+COPY windmill/backend/parsers/windmill-parser-wasm/pkg/ /backend/parsers/windmill-parser-wasm/pkg/
+COPY windmill/typescript-client/docs/ /frontend/static/tsdocs/
+COPY windmill/python-client/docs/ /frontend/static/pydocs/
 
 RUN npm run generate-backend-client
 ENV NODE_OPTIONS="--max-old-space-size=8192"
@@ -102,8 +102,8 @@ RUN npm run build
 # =============================================================================
 FROM --platform=linux/amd64 rust_base AS planner
 
-COPY windmill-fork/openflow.openapi.yaml /openflow.openapi.yaml
-COPY windmill-fork/backend ./
+COPY windmill/openflow.openapi.yaml /openflow.openapi.yaml
+COPY windmill/backend ./
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=$SCCACHE_DIR,sharing=locked \
@@ -131,8 +131,8 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     CARGO_NET_GIT_FETCH_WITH_CLI=true RUST_BACKTRACE=1 cargo chef cook --release --features "$features" --recipe-path recipe.json
 
 # Copy fork source
-COPY windmill-fork/openflow.openapi.yaml /openflow.openapi.yaml
-COPY windmill-fork/backend ./
+COPY windmill/openflow.openapi.yaml /openflow.openapi.yaml
+COPY windmill/backend ./
 
 RUN mkdir -p /frontend
 
@@ -291,7 +291,7 @@ WORKDIR ${APP}
 
 RUN ln -s ${APP}/windmill /usr/local/bin/windmill
 
-COPY windmill-fork/frontend/src/lib/hubPaths.json ${APP}/hubPaths.json
+COPY windmill/frontend/src/lib/hubPaths.json ${APP}/hubPaths.json
 
 RUN windmill cache ${APP}/hubPaths.json && rm ${APP}/hubPaths.json
 

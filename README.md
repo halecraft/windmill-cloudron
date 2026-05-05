@@ -52,6 +52,7 @@ This package runs Windmill as a single container with 6 supervised processes:
 - **Automatic email** — Cloudron's SMTP infrastructure is configured on every boot; email notifications work out of the box
 - **No artificial limits** — workspace, group, and SSO user caps are removed
 - **Full OAuth login flow** — restored from the open-source `windmill-oauth` crate in our fork
+- **S3/object storage** — workspace file browser, file upload/download, and job S3 access restored
 - **Audit logging** — restored for compliance and debugging
 - **User management** — setup wizard, password management, and workspace auto-invite all work
 
@@ -89,6 +90,7 @@ This package maintains a [fork of Windmill](https://github.com/halecraft/windmil
 | Restore OAuth + fix OpenRouter | Full OAuth login flow; fixes default AI model |
 | Remove limits + banners | Removes workspace (2), group (3), SSO user (10) caps and frontend banner |
 | Version string | Honest `X.Y.Z-cloudron` version instead of upstream git tag |
+| S3 object storage | Workspace file browser, multipart upload, job S3 access |
 
 See [`TECHNICAL.md`](TECHNICAL.md) for the full fork architecture and modification rules.
 
@@ -96,7 +98,7 @@ See [`TECHNICAL.md`](TECHNICAL.md) for the full fork architecture and modificati
 
 See [How to Update Windmill](TECHNICAL.md#9-how-to-update-windmill) in `TECHNICAL.md`. The short version:
 
-1. Fetch upstream: `cd windmill-fork && jj git fetch --remote upstream`
+1. Fetch upstream: `cd windmill && jj git fetch --remote upstream`
 2. Rebase: `jj rebase -b cloudron -d v<new_version>`
 3. Resolve conflicts, update `CloudronManifest.json`
 4. `cloudron build && cloudron update`

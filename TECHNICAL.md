@@ -174,7 +174,7 @@ are resolved in real source files with full IDE support.
 To inspect our modifications:
 
 ```sh
-cd windmill-fork
+cd windmill
 jj log -r 'main..cloudron'
 ```
 
@@ -213,7 +213,7 @@ Docker build context (~490MB saving).
 
 3. **Add new changes to the `cloudron` bookmark stack:**
    ```sh
-   cd windmill-fork
+   cd windmill
    jj new cloudron
    jj bookmark set cloudron -r @
    # ... make changes ...
@@ -418,9 +418,9 @@ to diagnose injection failures.
 cloudron build
 ```
 
-**Pre-build check:** Ensure `windmill-fork/` is checked out at the `cloudron` bookmark:
+**Pre-build check:** Ensure `windmill/` is checked out at the `cloudron` bookmark:
 ```sh
-cd windmill-fork && jj log -r @ --no-graph -T 'bookmarks'
+cd windmill && jj log -r @ --no-graph -T 'bookmarks'
 # Should show "cloudron"
 ```
 
@@ -446,7 +446,7 @@ runtime-bin-stages (deno, bun, php, composer, docker)
          final ── cloudron/base:5.0.0 + PostgreSQL 16 + Caddy + runtime deps
 ```
 
-Source files are copied directly from `windmill-fork/` in the build context. The fork's `.git/`
+Source files are copied directly from `windmill/` in the build context. The fork's `.git/`
 and `.jj/` directories are excluded via `.dockerignore` (~500MB saving). Version embedding uses
 `CARGO_PKG_VERSION` instead of `git describe`.
 
@@ -484,7 +484,7 @@ declaration regardless of the build host.
 
 1. **Fetch upstream releases:**
    ```sh
-   cd windmill-fork
+   cd windmill
    jj git fetch --remote upstream
    ```
 
@@ -526,7 +526,6 @@ declaration regardless of the build host.
 | Multiplayer editing | Enterprise Edition only |
 | Git sync | Implementation is in the private repo |
 | External triggers: Kafka, NATS, SQS, GCP Pub/Sub, Azure Event Hub | All EE |
-| S3 / object store helpers for jobs | ✅ Restored (AWS OIDC and advanced path permissions not supported) |
 | External secret backends: Vault, AWS Secrets Manager, Azure Key Vault | EE |
 | Full-text search / Tantivy indexer | EE |
 | OpenTelemetry export | EE |

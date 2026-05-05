@@ -4,12 +4,9 @@
 .jj-plan
 
 # Fork build artifacts and VCS internals (must not enter build context)
-windmill-fork/.git
-windmill-fork/.jj
-windmill-fork/backend/target/
-
-# Old submodule directory (may linger during transition)
-windmill/
+windmill/.git
+windmill/.jj
+windmill/backend/target/
 
 # Documentation (not needed in build context)
 docs
