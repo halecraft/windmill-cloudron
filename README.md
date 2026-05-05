@@ -118,8 +118,10 @@ Cloudron's backup system captures everything under `/app/data/` automatically.
 
 - **No nsjail sandbox** — Cloudron provides container-level isolation instead
 - **Single-instance only** — no HA or multi-node workers
-- **No multiplayer editing** (Enterprise Edition only)
-- **No Git sync, SAML SSO, external triggers, or OpenTelemetry** (Enterprise Edition)
+- **No multiplayer editing** — requires a separate service not shipped in this build
+- **No Git sync, SAML SSO, Kafka/NATS/SQS/GCP/Azure triggers, or OpenTelemetry** — not enabled in this build
+
+This Cloudron package neutralizes EE/license gating: working features previously gated behind a license check (schedule recovery hooks, mute error handler, restart flow from step, admins-workspace member adds, folder admin ops) are enabled, and service accounts, critical alerts (low-disk, jobs-waiting), and the AI documentation assistant (embedded `llms.txt` corpus) are implemented in the OSS fork. BigQuery, MSSQL, and OracleDB script executors are unlocked.
 
 See [Known Limitations](TECHNICAL.md#known-limitations) in `TECHNICAL.md` for the complete list.
 
