@@ -117,7 +117,7 @@ Cloudron's backup system captures everything under `/app/data/` automatically.
 - **No nsjail sandbox** — Cloudron provides container-level isolation instead
 - **Single-instance only** — no HA or multi-node workers
 - **No multiplayer editing** (Enterprise Edition only)
-- **No Git sync, SAML SSO, S3 helpers, external triggers, or OpenTelemetry** (Enterprise Edition)
+- **No Git sync, SAML SSO, external triggers, or OpenTelemetry** (Enterprise Edition)
 
 See [Known Limitations](TECHNICAL.md#known-limitations) in `TECHNICAL.md` for the complete list.
 

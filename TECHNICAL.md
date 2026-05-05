@@ -201,6 +201,7 @@ Docker build context (~490MB saving).
 | Restore OAuth + OpenRouter fix | OAuth login/callback flow; OpenRouter default model | `oauth2_oss.rs`, `copilot/lib.ts` |
 | Remove limits + banners | Remove workspace (2), group (3), SSO user (10) caps; remove frontend banner | `workspaces.rs`, `groups.rs`, `oauth2_oss.rs`, `AuthSettings.svelte` |
 | Version string | Replace `git_version!()` with `CARGO_PKG_VERSION`-cloudron | `utils.rs` |
+| S3 object storage helpers | Workspace file browser, multipart upload, job S3 access, file download/delete/move | `job_helpers_oss.rs`, `job_s3_helpers_oss.rs`, `StorageSettings.svelte` |
 
 ### Writing New Modifications — Rules
 
@@ -525,7 +526,7 @@ declaration regardless of the build host.
 | Multiplayer editing | Enterprise Edition only |
 | Git sync | Implementation is in the private repo |
 | External triggers: Kafka, NATS, SQS, GCP Pub/Sub, Azure Event Hub | All EE |
-| S3 / object store helpers for jobs | EE |
+| S3 / object store helpers for jobs | ✅ Restored (AWS OIDC and advanced path permissions not supported) |
 | External secret backends: Vault, AWS Secrets Manager, Azure Key Vault | EE |
 | Full-text search / Tantivy indexer | EE |
 | OpenTelemetry export | EE |
@@ -562,3 +563,8 @@ After deploying or updating, verify the following:
 - [ ] **LSP autocompletion works** in the script editor
 - [ ] **Email sending works** — test via a script or flow notification
 - [ ] **Audit logs are recorded** — check Settings → Audit Logs
+- [ ] **Workspace S3 bucket "Test" succeeds** in workspace settings
+- [ ] **Workspace S3 file browser ("Explore") lists files**
+- [ ] **Upload a file via the S3 file browser**
+- [ ] **HTTP trigger accepts `multipart/form-data` file upload**
+- [ ] **Flow receives `{"s3": "..."}` argument from file upload**
