@@ -447,6 +447,24 @@ cd windmill && jj bookmark set cloudron -r @
 This runs `docker build` under the hood. No `--build-arg` is needed — the Dockerfile defaults
 to `features="oss_core,all_languages"`.
 
+### Deploy Script
+
+`deploy.sh` wraps the build-deploy-cleanup cycle:
+
+```sh
+./deploy.sh              # build + update existing install
+./deploy.sh --reinstall  # build + uninstall + fresh install (interactive confirmation)
+./deploy.sh --no-build   # skip build, deploy last built image
+```
+
+Configuration lives in `.env` (see `.env.example`). The script:
+
+1. Runs `cloudron build` (unless `--no-build`)
+2. Moves the fork's `cloudron` bookmark to match what was built
+3. Deploys via `cloudron update` or uninstall+install (`--reinstall`)
+4. Removes old local Docker images (keeps only the deployed tag)
+5. Deletes old remote registry tags and runs garbage collection (if `REGISTRY_APP` is set)
+
 ### Dockerfile Stage Structure
 
 ```
@@ -529,8 +547,7 @@ declaration regardless of the build host.
 
 6. **Build and deploy:**
    ```sh
-   cloudron build
-   cloudron update --app windmill.example.com
+   ./deploy.sh
    ```
 
 ---

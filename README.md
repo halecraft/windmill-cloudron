@@ -6,14 +6,20 @@ Windmill turns scripts into shareable UIs automatically and lets you compose the
 
 ## Getting Started
 
-### Build & Install
+### Deploy
 
 ```sh
-cloudron build
-cloudron install -l windmill
+cp .env.example .env          # Edit .env with your Cloudron app location
+./deploy.sh                   # Build and deploy (update existing install)
+./deploy.sh --reinstall       # Fresh install (destroys data, asks for confirmation)
+./deploy.sh --no-build        # Deploy last built image without rebuilding
 ```
 
-> **Do NOT pass `--no-sso`** unless you specifically want to disable Cloudron SSO. The default install provisions OIDC automatically — no manual configuration needed.
+The deploy script builds the Docker image, pushes it to your Cloudron registry, deploys, and cleans up old images automatically.
+
+> **Do NOT pass `--no-sso`** to `cloudron install` unless you specifically want to disable Cloudron SSO. The default install provisions OIDC automatically — no manual configuration needed.
+
+For manual control, the underlying commands are `cloudron build`, `cloudron install -l windmill`, and `cloudron update --app windmill.halecraft.org`.
 
 ### First Login
 
@@ -101,7 +107,7 @@ See [How to Update Windmill](TECHNICAL.md#9-how-to-update-windmill) in `TECHNICA
 1. Fetch upstream: `cd windmill && jj git fetch --remote upstream`
 2. Rebase: `jj rebase -b cloudron -d v<new_version>`
 3. Resolve conflicts, update `CloudronManifest.json`
-4. `cloudron build && cloudron update`
+4. `./deploy.sh`
 
 The version string (`X.Y.Z-cloudron`) updates automatically on rebase.
 
