@@ -4,7 +4,7 @@
 # Grep-budget verification: ensures no user-visible "EE" / "enterprise" /
 # "license" strings survive in the built frontend bundle or release Rust
 # binary. Used by:
-#   - Phase 7 manual verification (defang-ee plan)
+#   - Phase 7 manual verification (oss-unlock plan)
 #   - CI step
 #   - setup-hooks.sh pre-commit hook
 #
@@ -14,14 +14,14 @@
 #   1. windmill/frontend/build/    (built SvelteKit bundle, if present)
 #   2. windmill/backend/target/release/windmill  (release binary, if present)
 #   3. Source-level guard: windmill/frontend/src and windmill/backend/{src,**/src}
-#      for FORBIDDEN_PATTERNS introduced after the defang-ee plan landed.
+#      for FORBIDDEN_PATTERNS introduced after the oss-unlock plan landed.
 #
 # Allowed matches (excluded from the search):
 #   - LICENSE-* / NOTICE / COPYING files
 #   - source map files (*.map)
 #   - *.lock files
 #   - test fixtures / generated docs (openapi-*.yaml)
-#   - Comments containing "defang-ee" (acknowledged context)
+#   - Comments containing "oss-unlock" (acknowledged context)
 #   - .jj-plan/*.md (the plan itself naturally references EE)
 #
 # Run from repo root.
@@ -132,20 +132,20 @@ if [ -f "windmill/backend/target/release/windmill" ]; then
     done
 fi
 
-# Filter the found list: drop lines that contain "defang-ee" (acknowledged
+# Filter the found list: drop lines that contain "oss-unlock" (acknowledged
 # context), or that are inside test source files we couldn't pre-exclude.
 FILTERED_LOG="$(mktemp -t check-no-ee-strings-filtered.XXXXXX)"
 trap 'rm -f "$FOUND_LOG" "$FILTERED_LOG"' EXIT
 
 # Filter:
-#   - "defang-ee" markers (acknowledged context)
+#   - "oss-unlock" markers (acknowledged context)
 #   - test fixtures we couldn't pre-exclude
 #   - Rust doc-comment / regular comment lines (`///`, `//!`, `//`) — these are
 #     developer-facing source documentation, never reach the user-facing UI or
 #     job logs. Format from grep is `path:lineno:content`, so we match the
 #     content portion (third+ fields).
 grep -v \
-    -e "defang-ee" \
+    -e "oss-unlock" \
     -e "/tests/" \
     -e "/test/" \
     -e "_test\." \
@@ -163,7 +163,7 @@ if [ -s "$FILTERED_LOG" ]; then
     echo ""
     echo "[check-no-ee-strings] If a hit is intentional (e.g. neutralized error"
     echo "string still includes the word 'license' for legal reasons), add a"
-    echo "'defang-ee' marker comment on the same line, or extend the EXCLUDES"
+    echo "'oss-unlock' marker comment on the same line, or extend the EXCLUDES"
     echo "list in scripts/check-no-ee-strings.sh."
     FOUND=1
 else

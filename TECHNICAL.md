@@ -202,6 +202,8 @@ Docker build context (~490MB saving).
 | Remove limits + banners | Remove workspace (2), group (3), SSO user (10) caps; remove frontend banner | `workspaces.rs`, `groups.rs`, `oauth2_oss.rs`, `AuthSettings.svelte` |
 | Version string | Replace `git_version!()` with `CARGO_PKG_VERSION`-cloudron | `utils.rs` |
 | S3 object storage helpers | Workspace file browser, multipart upload, job S3 access, file download/delete/move | `job_helpers_oss.rs`, `job_s3_helpers_oss.rs`, `StorageSettings.svelte` |
+| Deduplicate service-account helpers | Shared email format, username validation, token issuance for service accounts | `service_accounts.rs`, `workspaces_oss.rs`, `users_oss.rs` (windmill-api-users) |
+| Restore OSS functionality | Ungate working code paths (restart flow, mute error handler, schedule hooks, critical alerts, admins-workspace, BigQuery/MSSQL/OracleDB); neutralize EE error strings in stubs; implement service accounts, critical alerts producer, AI docs retrieval; hide non-functional sidebar entries and settings panes; set enterpriseLicense store to synthetic value | many `*_oss.rs`, `*.svelte`, `enterpriseUtils.ts`, `inkeep_oss.rs`, `inkeep/corpus.json` |
 
 ### Writing New Modifications — Rules
 
@@ -222,6 +224,18 @@ Docker build context (~490MB saving).
 
 4. **Prefer modifying `*_oss.rs` stub files** over mainline files. Stub files have
    near-zero upstream churn; mainline files (e.g., `workspaces.rs`) change frequently.
+
+5. **Never introduce user-visible strings containing 'EE', 'enterprise', or 'license'.**
+   If a feature is unavailable, the error message should say "not enabled in this build"
+   or be silently absent from the UI. Run `scripts/check-no-ee-strings.sh` before each
+   commit; the only allowed matches are inside `LICENSE-*` and `NOTICE` files.
+
+6. **When multiple `_oss.rs` stubs share an identical pattern, extract a shared primitive.**
+   Place helpers in `windmill-common` (lowest in the crate DAG) so all consumer crates
+   can reach them. Accept duplication when patterns differ in kind (different column sets,
+   different conflict behavior, different post-insert logic) — a kitchen-sink helper is
+   worse than honest duplication. Current shared primitives:
+   `windmill-common::service_accounts` (email format, username validation, token issuance).
 
 ---
 
@@ -418,10 +432,16 @@ to diagnose injection failures.
 cloudron build
 ```
 
-**Pre-build check:** Ensure `windmill/` is checked out at the `cloudron` bookmark:
+**Pre-build check:** The Docker build copies whatever is on disk in `windmill/` — it uses the
+working copy, not a specific bookmark. Verify the fork is in the expected state:
 ```sh
-cd windmill && jj log -r @ --no-graph -T 'bookmarks'
-# Should show "cloudron"
+cd windmill && jj log -r 'cloudron..@' --no-graph -T 'description.first_line() ++ "\n"'
+# Should show nothing (@ is at cloudron) or only uncommitted work you intend to include
+```
+
+After a successful build, move the bookmark to match what was built:
+```sh
+cd windmill && jj bookmark set cloudron -r @
 ```
 
 This runs `docker build` under the hood. No `--build-arg` is needed — the Dockerfile defaults
@@ -517,28 +537,23 @@ declaration regardless of the build host.
 
 ## 10. Known Limitations
 
-### Not Available (by design or omission)
+### Not Available
 
 | Feature | Reason |
 |---------|--------|
-| nsjail sandbox | Omitted from build. Workers check `NSJAIL_AVAILABLE` at runtime and gracefully degrade to running scripts without sandboxing. |
-| High availability / multi-node | Single-instance only — no HA, no distributed workers |
-| Multiplayer editing | Enterprise Edition only |
-| Git sync | Implementation is in the private repo |
-| External triggers: Kafka, NATS, SQS, GCP Pub/Sub, Azure Event Hub | All EE |
-| External secret backends: Vault, AWS Secrets Manager, Azure Key Vault | EE |
-| Full-text search / Tantivy indexer | EE |
-| OpenTelemetry export | EE |
-| Autoscaling | EE, Kubernetes-oriented |
-| SAML SSO | EE — Cloudron provides OIDC instead |
-| Concurrency limits | EE |
-| Email triggers (inbound SMTP server) | Gated behind `private` |
-
-### Cosmetic Issues
-
-- **In-app AI documentation assistant** — `POST /api/inkeep` shows an "Error getting
-  documentation" toast. This is cosmetic; the AI code assistant still works, it just lacks
-  Windmill-specific docs context. Inkeep is a paid EE integration.
+| nsjail sandbox | Not included in this build. Workers detect `NSJAIL_AVAILABLE` at runtime and run scripts without sandboxing. Cloudron provides container-level isolation. |
+| High availability / multi-node | Single-instance architecture — no distributed workers |
+| Multiplayer editing | Requires a separate collaboration service not shipped in this build |
+| Git sync | Implementation is in the upstream private repository |
+| External triggers: Kafka, NATS, SQS, GCP Pub/Sub, Azure Event Hub | Not enabled in this build (require `ee_core` feature) |
+| External secret backends: Vault, AWS Secrets Manager, Azure Key Vault | Not enabled in this build |
+| Full-text search / Tantivy indexer | Not enabled in this build (requires `tantivy` feature) |
+| OpenTelemetry export | Not enabled in this build |
+| Autoscaling | Not enabled; Kubernetes-oriented, not applicable to single-instance Cloudron |
+| SAML SSO | Not enabled — Cloudron provides OIDC, which is configured automatically |
+| Concurrency limits | Not enabled in this build |
+| Email triggers (inbound SMTP) | Implementation is in the upstream private repository |
+| Snowflake executor | Not enabled (requires proprietary SDK not included in `all_languages`) |
 
 ### Operational Caveats
 
@@ -567,3 +582,10 @@ After deploying or updating, verify the following:
 - [ ] **Upload a file via the S3 file browser**
 - [ ] **HTTP trigger accepts `multipart/form-data` file upload**
 - [ ] **Flow receives `{"s3": "..."}` argument from file upload**
+- [ ] **Service accounts** — can create a service account in workspace settings
+- [ ] **Critical alerts** — low-disk and jobs-waiting alerts appear in workspace settings
+- [ ] **AI documentation assistant** — the in-editor help returns Windmill docs context
+- [ ] **No "(EE)" labels visible** in sidebar, settings, or editor UI
+- [ ] **Schedule recovery hooks** — on_recovery and on_success can be configured
+- [ ] **Restart flow from step** — the restart button works without errors
+- [ ] **Mute error handler** — the toggle saves without 400 errors
