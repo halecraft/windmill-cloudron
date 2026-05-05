@@ -1,0 +1,78 @@
+diff --git a/backend/windmill-api-workspaces/src/workspaces_oss.rs b/backend/windmill-api-workspaces/src/workspaces_oss.rs
+index 872061e554..da1499cc89 100644
+--- a/backend/windmill-api-workspaces/src/workspaces_oss.rs
++++ b/backend/windmill-api-workspaces/src/workspaces_oss.rs
+@@ -11,16 +11,59 @@ use windmill_api_auth::ApiAuthed;
+ #[cfg(not(feature = "private"))]
+ use windmill_common::DB;
+ 
++// --- New imports for implementation ---
++#[cfg(not(feature = "private"))]
++use windmill_audit::audit_oss::audit_log;
++#[cfg(not(feature = "private"))]
++use windmill_audit::ActionKind;
++#[cfg(not(feature = "private"))]
++use windmill_common::utils::require_admin;
++
+ #[cfg(not(feature = "private"))]
+ pub async fn edit_auto_invite(
+-    _authed: ApiAuthed,
+-    _db: DB,
+-    _w_id: String,
+-    _ea: EditAutoInvite,
++    authed: ApiAuthed,
++    db: DB,
++    w_id: String,
++    ea: EditAutoInvite,
+ ) -> windmill_common::error::Result<String> {
+-    Err(windmill_common::error::Error::internal_err(
+-        "Not implemented on OSS".to_string(),
+-    ))
++    require_admin(authed.is_admin, &authed.username)?;
++
++    let operator = ea.operator.unwrap_or(false);
++    let invite_all = ea.invite_all.unwrap_or(false);
++    let auto_add = ea.auto_add.unwrap_or(false);
++    let enabled = invite_all || auto_add;
++    let mode = if auto_add { "add" } else { "invite" };
++
++    let auto_invite = serde_json::json!({
++        "enabled": enabled,
++        "operator": operator,
++        "mode": mode,
++    });
++
++    let mut tx = db.begin().await?;
++
++    sqlx::query(
++        "UPDATE workspace_settings SET auto_invite = $1 WHERE workspace_id = $2",
++    )
++    .bind(&auto_invite)
++    .bind(&w_id)
++    .execute(&mut *tx)
++    .await?;
++
++    audit_log(
++        &mut *tx,
++        &authed,
++        "workspaces.edit_auto_invite",
++        ActionKind::Update,
++        &w_id,
++        None,
++        None,
++    )
++    .await?;
++
++    tx.commit().await?;
++
++    Ok("Updated auto-invite settings".to_string())
+ }
+ 
+ #[cfg(not(feature = "private"))]
+@@ -33,4 +76,4 @@ pub async fn create_service_account(
+     Err(windmill_common::error::Error::BadRequest(
+         "Service accounts require Windmill Enterprise Edition".to_string(),
+     ))
+-}
++}
+\ No newline at end of file

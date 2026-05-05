@@ -82,6 +82,36 @@ users into thinking their API key is invalid.
 Changes:
 - `AI_PROVIDERS.openrouter.defaultModels`: `['meta-llama/llama-3.2-3b-instruct:free']` → `['deepseek/deepseek-v4-pro']`
 
+### 007-implement-user-mgmt.patch
+
+Restores user creation, password hashing, and password management in the OSS build.
+These are required for the initial setup wizard ("Set account & finish") and ongoing
+password management.
+
+**File modified:** `backend/windmill-api/src/users_oss.rs`
+
+Changes:
+- **`hash_password()`** — generates a random salt via `SaltString::generate(OsRng)` and hashes with `argon2::PasswordHasher`, returning the PHC string. Foundation for both `create_user` and `set_password`.
+- **`create_user()`** — requires super admin, normalizes email to lowercase, hashes password, generates a unique username via `generate_instance_wide_unique_username`, INSERTs into the `password` table, writes audit log (`users.add_global`), returns `(201 CREATED, email)`.
+- **`set_password()`** — hashes new password, UPDATEs `password_hash` in the `password` table, writes audit log (`users.setpassword`). Used by both self-service password change and admin-driven password reset.
+- **`submit_onboarding_data()`** — changed from error to no-op success (`Ok("ok")`), preventing a spurious error toast during the onboarding telemetry step.
+
+Transitive fixes:
+- `reset_password` (magic link flow) already calls `hash_password` — now works
+- `set_password_of_user` (admin resets another user's password) calls `set_password` — now works
+
+### 008-implement-workspace-auto-invite.patch
+
+Restores the workspace auto-invite settings endpoint. Without this, creating a workspace
+with "Auto-add anyone joining" toggled on reports a failure (even though the workspace
+itself is created successfully).
+
+**File modified:** `backend/windmill-api-workspaces/src/workspaces_oss.rs`
+
+Changes:
+- **`edit_auto_invite()`** — requires workspace admin via `require_admin`, builds JSONB value `{"enabled", "operator", "mode"}` from `EditAutoInvite` fields, UPDATEs `workspace_settings.auto_invite`, writes audit log (`workspaces.edit_auto_invite`).
+- **`create_service_account()`** — unchanged (intentionally EE-only, returns `BadRequest`).
+
 ## How Patches Are Applied
 
 The Dockerfile's **patcher stage** copies patches into the source tree and applies them:
