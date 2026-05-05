@@ -4,7 +4,7 @@ This document describes the architecture, build pipeline, and operational detail
 Cloudron package for [Windmill](https://www.windmill.dev/), an open-source developer platform
 for building production-grade workflows and UIs from scripts.
 
-**Built against:** Windmill v1.690.0  
+**Built against:** Windmill v1.695.0
 **Cloudron base image:** `cloudron/base:5.0.0`  
 **Manifest ID:** `com.windmill-labs.cloudronapp`
 
@@ -15,7 +15,7 @@ for building production-grade workflows and UIs from scripts.
 1. [Architecture Overview](#1-architecture-overview)
 2. [Why Embedded PostgreSQL](#2-why-embedded-postgresql)
 3. [Feature Flag Landscape](#3-feature-flag-landscape)
-4. [OSS Patches](#4-oss-patches)
+4. [OSS Modifications (Fork Architecture)](#4-oss-modifications-fork-architecture)
 5. [OIDC / SSO Integration](#5-oidc--sso-integration)
 6. [SMTP / Email Integration](#6-smtp--email-integration)
 7. [Startup Sequence](#7-startup-sequence)
@@ -149,111 +149,85 @@ one of the key differentiators from the official OSS image.
 The `private` feature flag gates code that lives in the proprietary `windmill-ee-private`
 repository. We cannot compile with this feature because the repository is not publicly
 accessible. Functionality behind `private` includes: OAuth login wiring, audit log
-implementation, email sending, git sync, S3 helpers, SAML, and more. Our patches restore
+implementation, email sending, git sync, S3 helpers, SAML, and more. Our fork restores
 the most critical subset of this functionality.
 
 ---
 
-## 4. OSS Patches
+## 4. OSS Modifications (Fork Architecture)
 
-### Background: The EE Refactor
+### Why a Fork
 
-In June 2025, Windmill underwent a major restructuring (commit `0e316239dd`, PR #5844) that
-moved substantial functionality from the open-source codebase behind the `private` feature flag.
-This included OAuth login, audit log recording/querying, S3 storage helpers, and git sync.
+In June 2025, Windmill's EE refactor (PR #5844) moved substantial functionality behind the
+`private` feature flag. We restore the most critical subset in our fork. 
 
-The affected code was replaced with stub files (`*_oss.rs`) that return errors or empty results.
-For example, `oauth2_oss.rs` returns an empty provider list, `audit_oss.rs` silently discards
-audit events, and `email_oss.rs` does nothing.
+The fork at [halecraft/windmill](https://github.com/halecraft/windmill) carries our modifications
+as a stack of jj changes on a `cloudron` bookmark, rebased onto each upstream release. Conflicts
+are resolved in real source files with full IDE support.
 
-In January 2026, the `windmill-oauth` crate was released as open source, restoring the OAuth
-*implementation* — but the wiring stub in `oauth2_oss.rs` was never updated to call it. The
-crate exists and compiles, but the OSS build ignores it.
+### Branch Structure
 
-Our patches bridge this gap by wiring the stubs to the real implementations.
+- **`main`** — tracks `windmill-labs/windmill` upstream. Never modified directly.
+- **`cloudron`** — jj bookmark at the tip of our modification stack, based on `main`.
+- **`upstream`** — git remote pointing to `windmill-labs/windmill` for fetching new releases.
 
-### Patch Summary
+To inspect our modifications:
 
-| Patch | Purpose | Files Modified |
-|-------|---------|----------------|
-| `001-remove-limits.patch` | Removes workspace (2) and group (3) caps | `workspaces.rs`, `groups.rs` |
-| `002-restore-oauth.patch` | Wires `oauth2_oss.rs` to call `windmill-oauth` — full OAuth login/callback flow; removes SSO user limit (10→unlimited) | `oauth2_oss.rs` |
-| `003-restore-audit-logs.patch` | Restores audit log write/read/list | `audit_oss.rs` |
-| `004-implement-email.patch` | Implements `send_email()` using `mail-send` crate | `email_oss.rs` |
-| `005-remove-sso-limit-banner.patch` | Removes frontend banner about SSO user limits | `AuthSettings.svelte` |
-| `006-fix-openrouter-default-model.patch` | Fixes default AI model name for OpenRouter | `lib.ts` |
-| `007-implement-user-mgmt.patch` | Implements `create_user`, `set_password`, `hash_password` | `users_oss.rs` |
-| `008-implement-workspace-auto-invite.patch` | Implements `edit_auto_invite` | `workspaces_oss.rs` |
+```sh
+cd windmill-fork
+jj log -r 'main..cloudron'
+```
 
-For detailed descriptions of every function changed, see [`patches/README.md`](patches/README.md).
+### Version String
 
-### Writing New Patches — Rules
+The fork replaces the upstream `git_version!()` proc macro with:
+
+```rust
+pub const GIT_VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), "-cloudron");
+```
+
+This produces `1.695.0-cloudron` — derived from `Cargo.toml` at compile time. On upstream
+rebase, `CARGO_PKG_VERSION` updates automatically. No `.git/` directory is needed in the
+Docker build context (~490MB saving).
+
+### Modification Summary
+
+| jj Change | Purpose | Files Modified |
+|-----------|---------|----------------|
+| Restore audit logs | Audit log recording, querying, and listing | `audit_oss.rs` |
+| Implement email | SMTP email sending via `mail-send` crate | `email_oss.rs` |
+| Implement user mgmt | `create_user`, `set_password`, `hash_password` | `users_oss.rs` |
+| Workspace auto-invite | `edit_auto_invite` settings endpoint | `workspaces_oss.rs` |
+| Restore OAuth + OpenRouter fix | OAuth login/callback flow; OpenRouter default model | `oauth2_oss.rs`, `copilot/lib.ts` |
+| Remove limits + banners | Remove workspace (2), group (3), SSO user (10) caps; remove frontend banner | `workspaces.rs`, `groups.rs`, `oauth2_oss.rs`, `AuthSettings.svelte` |
+| Version string | Replace `git_version!()` with `CARGO_PKG_VERSION`-cloudron | `utils.rs` |
+
+### Writing New Modifications — Rules
 
 1. **Use runtime `sqlx::query().bind()`, never compile-time `sqlx::query!()`.**
-   The `.sqlx/` offline cache only has entries for upstream queries. Adding a new
-   `sqlx::query!()` macro invocation will fail at compile time because the offline
-   cache won't have a matching entry.
+   The `.sqlx/` offline cache only has entries for upstream queries.
 
 2. **Gate all new code with `#[cfg(not(feature = "private"))]`.**
-   This ensures patches are inert if someone builds with the `private` feature, preventing
-   conflicts with the proprietary implementation.
+   Ensures modifications are inert if building with the `private` feature.
 
-3. **Generate patches via `git diff` in the windmill submodule, not by hand-editing patch files.**
-   Hand-editing patch files is error-prone and produces malformed hunks.
-
-4. **Verify all patches apply together:**
+3. **Add new changes to the `cloudron` bookmark stack:**
    ```sh
-   cd windmill
-   for p in ../patches/*.patch; do git apply --check "$p" && echo "OK: $(basename $p)"; done
+   cd windmill-fork
+   jj new cloudron
+   jj bookmark set cloudron -r @
+   # ... make changes ...
+   jj describe -m 'feat(oss): description of change'
    ```
 
-5. **Reset the submodule after generating:**
-   ```sh
-   cd windmill && git checkout .
-   ```
-
-### How to Regenerate Patches After a Windmill Version Bump
-
-When updating the windmill submodule to a new version, existing patches may not apply
-cleanly due to upstream changes in the same files.
-
-1. **Try applying existing patches:**
-   ```sh
-   cd windmill
-   for p in ../patches/*.patch; do git apply "$p" || echo "CONFLICT: $p"; done
-   ```
-
-2. **If patches apply cleanly**, you're done. Build and test.
-
-3. **If patches conflict**, resolve manually:
-   ```sh
-   cd windmill
-   git checkout .                                    # reset to clean
-   git apply --3way ../patches/NNN-name.patch        # attempt 3-way merge
-   # ... or manually edit the file to match the patch intent
-   ```
-
-4. **Regenerate the patch:**
-   ```sh
-   cd windmill
-   git diff -- backend/path/to/modified_file.rs > ../patches/NNN-name.patch
-   git checkout .                                    # reset submodule
-   ```
-
-5. **Verify all patches apply cleanly together:**
-   ```sh
-   cd windmill
-   for p in ../patches/*.patch; do git apply "$p" || echo "FAILED: $p"; done
-   git diff --stat                                   # verify expected changes
-   git checkout .                                    # reset
-   ```
+4. **Prefer modifying `*_oss.rs` stub files** over mainline files. Stub files have
+   near-zero upstream churn; mainline files (e.g., `workspaces.rs`) change frequently.
 
 ---
 
 ## 5. OIDC / SSO Integration
 
 Cloudron SSO is integrated through two complementary mechanisms: database credential injection
-(runtime) and compiled OAuth client wiring (build-time patch).
+(runtime) and compiled OAuth client wiring (build-time fork modification).
 
 ### Credential Injection
 
@@ -286,16 +260,16 @@ The `global_settings` table has an `AFTER INSERT OR UPDATE` NOTIFY trigger. When
 `global_settings_notify` channel. The windmill-server process listens on this channel and
 reloads OAuth configuration within seconds — no restart required.
 
-### The Patched OAuth Client (Patch 002)
+### The Modified OAuth Client
 
-The injected credentials are consumed by the patched `build_oauth_clients()` function in
+The injected credentials are consumed by the modified `build_oauth_clients()` function in
 `oauth2_oss.rs`. Windmill's OAuth system has two paths for constructing OAuth clients:
 
 - **Path A** — providers listed in the compiled-in `oauth_login.json` (Google, GitHub, etc.)
 - **Path B** — providers with an embedded `login_config` object in their database entry
 
 Since `"cloudron"` is not in the compiled-in `oauth_login.json`, the injected entry includes
-a full `login_config` with auth/token/userinfo URLs. The patched code reads this from the
+a full `login_config` with auth/token/userinfo URLs. The modified code reads this from the
 database and constructs the OAuth client via Path B.
 
 ### Callback URL
@@ -443,6 +417,12 @@ to diagnose injection failures.
 cloudron build
 ```
 
+**Pre-build check:** Ensure `windmill-fork/` is checked out at the `cloudron` bookmark:
+```sh
+cd windmill-fork && jj log -r @ --no-graph -T 'bookmarks'
+# Should show "cloudron"
+```
+
 This runs `docker build` under the hood. No `--build-arg` is needed — the Dockerfile defaults
 to `features="oss_core,all_languages"`.
 
@@ -450,8 +430,6 @@ to `features="oss_core,all_languages"`.
 
 ```
 runtime-bin-stages (deno, bun, php, composer, docker)
-        │
-    patcher ─── applies patches, prepares .git for version embedding
         │
    rust_base ─── shared Rust toolchain (mold, sccache, cargo-chef)
     ┌───┼───┐
@@ -466,6 +444,10 @@ runtime-bin-stages (deno, bun, php, composer, docker)
             │
          final ── cloudron/base:5.0.0 + PostgreSQL 16 + Caddy + runtime deps
 ```
+
+Source files are copied directly from `windmill-fork/` in the build context. The fork's `.git/`
+and `.jj/` directories are excluded via `.dockerignore` (~500MB saving). Version embedding uses
+`CARGO_PKG_VERSION` instead of `git describe`.
 
 ### Building on Apple Silicon (arm64)
 
@@ -499,45 +481,34 @@ declaration regardless of the build host.
 
 ## 9. How to Update Windmill
 
-1. **Update the submodule:**
+1. **Fetch upstream releases:**
    ```sh
-   cd windmill
-   git fetch --tags
-   git checkout v<new_version>
+   cd windmill-fork
+   jj git fetch --remote upstream
    ```
 
-2. **Re-apply patches:**
+2. **Rebase our modifications onto the new version:**
    ```sh
-   for p in ../patches/*.patch; do git apply "$p" || echo "CONFLICT: $p"; done
+   jj rebase -b cloudron -d v<new_version>
    ```
 
-3. **Fix any patch conflicts.** Most likely in `*_oss.rs` files if function signatures changed.
-   See [How to Regenerate Patches](#how-to-regenerate-patches-after-a-windmill-version-bump)
-   for the resolution workflow.
+3. **Resolve any conflicts.** jj marks conflicted changes in `jj log`. Fix conflicts in
+   real source files (not patch hunks), then `jj resolve` each one. Most conflicts will be
+   in the "Remove limits" change at the tip of the stack (highest upstream churn).
 
-4. **Regenerate patches from the fixed state:**
+4. **Verify the stack:**
    ```sh
-   cd windmill
-   git diff -- backend/path/to/modified_file.rs > ../patches/NNN-name.patch
+   jj log -r 'main..cloudron'    # should show 7 clean changes
    ```
 
-5. **Reset submodule:**
-   ```sh
-   cd windmill && git checkout .
-   ```
+5. **Update the manifest version:**
+   Edit `CloudronManifest.json` and set `"upstreamVersion"` to the new version.
+   Note: `GIT_VERSION` in the binary updates automatically — `CARGO_PKG_VERSION` tracks
+   the workspace `Cargo.toml` which upstream bumps every release.
 
-6. **Update `upstreamVersion` in `CloudronManifest.json`:**
-   ```json
-   "upstreamVersion": "<new_version>"
-   ```
-
-7. **Build:**
+6. **Build and deploy:**
    ```sh
    cloudron build
-   ```
-
-8. **Deploy:**
-   ```sh
    cloudron update --app windmill.example.com
    ```
 

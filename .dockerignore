@@ -1,11 +1,15 @@
-# Version control
+# Version control — .git/ excluded from all directories
+.git
 .jj
 .jj-plan
 
-# Git: exclude everything except the submodule's git object store
-# (needed by the patcher stage for version embedding and git apply)
-.git
-!.git/modules/windmill
+# Fork build artifacts and VCS internals (must not enter build context)
+windmill-fork/.git
+windmill-fork/.jj
+windmill-fork/backend/target/
+
+# Old submodule directory (may linger during transition)
+windmill/
 
 # Documentation (not needed in build context)
 docs

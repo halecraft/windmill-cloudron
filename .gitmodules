@@ -1,3 +1,0 @@
-[submodule "windmill"]
-	path = windmill
-	url = git@github.com:windmill-labs/windmill.git

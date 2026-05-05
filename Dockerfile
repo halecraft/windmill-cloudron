@@ -1,10 +1,10 @@
 # =============================================================================
 # Windmill Cloudron Dockerfile
-# Source build with --features oss, adapted from upstream v1.690.0
+# Source build with --features oss, adapted from upstream v1.695.0
 # Base image: cloudron/base:5.0.0 with embedded PostgreSQL 16
 #
 # Stage structure:
-#   runtime-bin-stages → patcher → rust_base → duckdb_ffi_builder → frontend → planner → builder → final
+#   runtime-bin-stages → rust_base → duckdb_ffi_builder → frontend → planner → builder → final
 #
 # Context: jj:yrmvpkkz
 # =============================================================================
@@ -26,39 +26,6 @@ FROM --platform=linux/amd64 oven/bun:1.3.10 AS bun-bin
 FROM --platform=linux/amd64 php:8.3.30-cli-bookworm AS php-bin
 FROM --platform=linux/amd64 composer:2.9.5 AS composer-bin
 FROM --platform=linux/amd64 docker:29-dind AS docker-bin
-
-# =============================================================================
-# PATCHER STAGE — applies patches and provides .git for version embedding
-# Not in upstream. Needed because:
-# 1. The builder flattens backend/ contents, but patches use full repo paths
-# 2. windmill/.git is a submodule pointer file, not a real git directory
-# =============================================================================
-FROM debian:bookworm-slim AS patcher
-
-RUN apt-get update && apt-get install -y --no-install-recommends git \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
-
-ARG WINDMILL_SRC=./windmill
-
-# Copy full windmill source tree (includes .git pointer file from submodule)
-COPY ${WINDMILL_SRC}/ /windmill/
-
-# The submodule's .git is a file ("gitdir: ../.git/modules/windmill/"), not a directory.
-# Remove it so we can replace with the real git object store for version embedding.
-RUN rm -f /windmill/.git
-
-# Place submodule's git object store so git describe finds version tags
-COPY .git/modules/windmill/ /windmill/.git/
-
-# Apply patches (initially empty — jj:kpumounn populates patches/)
-COPY patches/ /windmill/patches/
-RUN if ls /windmill/patches/*.patch 1>/dev/null 2>&1; then \
-      cd /windmill && for p in /windmill/patches/*.patch; do \
-        echo "Applying patch: $p" && git apply "$p"; \
-      done; \
-    else \
-      echo "No patches to apply"; \
-    fi
 
 # =============================================================================
 # RUST BASE — shared by planner, builder, and duckdb_ffi stages
@@ -95,7 +62,7 @@ WORKDIR /windmill-duckdb-ffi-internal
 RUN apt-get update && apt-get install -y clang=1:14.0-55.* libclang-dev=1:14.0-55.* cmake=3.25.* \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-COPY --from=patcher /windmill/backend/windmill-duckdb-ffi-internal .
+COPY windmill-fork/backend/windmill-duckdb-ffi-internal .
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=$SCCACHE_DIR,sharing=locked \
@@ -107,22 +74,22 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 FROM --platform=linux/amd64 node:24-alpine AS frontend
 
 WORKDIR /frontend
-COPY --from=patcher /windmill/frontend/package.json /windmill/frontend/package-lock.json /windmill/frontend/.npmrc ./
-COPY --from=patcher /windmill/frontend/scripts/ ./scripts/
+COPY windmill-fork/frontend/package.json windmill-fork/frontend/package-lock.json windmill-fork/frontend/.npmrc ./
+COPY windmill-fork/frontend/scripts/ ./scripts/
 RUN npm ci
 
 # Copy all frontend source
-COPY --from=patcher /windmill/frontend .
+COPY windmill-fork/frontend .
 RUN mkdir /backend
-COPY --from=patcher /windmill/backend/windmill-api/openapi.yaml /backend/windmill-api/openapi.yaml
-COPY --from=patcher /windmill/openflow.openapi.yaml /openflow.openapi.yaml
-COPY --from=patcher /windmill/backend/windmill-api/build_openapi.sh /backend/windmill-api/build_openapi.sh
-COPY --from=patcher /windmill/system_prompts/auto-generated /system_prompts/auto-generated
+COPY windmill-fork/backend/windmill-api/openapi.yaml /backend/windmill-api/openapi.yaml
+COPY windmill-fork/openflow.openapi.yaml /openflow.openapi.yaml
+COPY windmill-fork/backend/windmill-api/build_openapi.sh /backend/windmill-api/build_openapi.sh
+COPY windmill-fork/system_prompts/auto-generated /system_prompts/auto-generated
 
 RUN cd /backend/windmill-api && . ./build_openapi.sh
-COPY --from=patcher /windmill/backend/parsers/windmill-parser-wasm/pkg/ /backend/parsers/windmill-parser-wasm/pkg/
-COPY --from=patcher /windmill/typescript-client/docs/ /frontend/static/tsdocs/
-COPY --from=patcher /windmill/python-client/docs/ /frontend/static/pydocs/
+COPY windmill-fork/backend/parsers/windmill-parser-wasm/pkg/ /backend/parsers/windmill-parser-wasm/pkg/
+COPY windmill-fork/typescript-client/docs/ /frontend/static/tsdocs/
+COPY windmill-fork/python-client/docs/ /frontend/static/pydocs/
 
 RUN npm run generate-backend-client
 ENV NODE_OPTIONS="--max-old-space-size=8192"
@@ -135,8 +102,8 @@ RUN npm run build
 # =============================================================================
 FROM --platform=linux/amd64 rust_base AS planner
 
-COPY --from=patcher /windmill/openflow.openapi.yaml /openflow.openapi.yaml
-COPY --from=patcher /windmill/backend ./
+COPY windmill-fork/openflow.openapi.yaml /openflow.openapi.yaml
+COPY windmill-fork/backend ./
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=$SCCACHE_DIR,sharing=locked \
@@ -163,17 +130,14 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=$SCCACHE_DIR,sharing=locked \
     CARGO_NET_GIT_FETCH_WITH_CLI=true RUST_BACKTRACE=1 cargo chef cook --release --features "$features" --recipe-path recipe.json
 
-# Copy patched source
-COPY --from=patcher /windmill/openflow.openapi.yaml /openflow.openapi.yaml
-COPY --from=patcher /windmill/backend ./
+# Copy fork source
+COPY windmill-fork/openflow.openapi.yaml /openflow.openapi.yaml
+COPY windmill-fork/backend ./
 
 RUN mkdir -p /frontend
 
 COPY --from=frontend /frontend/build /frontend/build
 COPY --from=frontend /backend/windmill-api/openapi-deref.yaml ./windmill-api/openapi-deref.yaml
-
-# Copy submodule git data for git_version!() compile-time macro
-COPY --from=patcher /windmill/.git/ .git/
 
 # Build windmill binary
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
@@ -197,7 +161,7 @@ ARG GO_VERSION=1.26.0
 ARG APP=/app/code
 ARG features="oss_core,all_languages"
 
-# Python version — must match upstream v1.690.0
+# Python version — must match upstream v1.695.0
 ARG LATEST_STABLE_PY=3.12
 ENV UV_PYTHON_INSTALL_DIR=/tmp/windmill/cache/py_runtime
 ENV UV_PYTHON_PREFERENCE=only-managed
@@ -327,7 +291,7 @@ WORKDIR ${APP}
 
 RUN ln -s ${APP}/windmill /usr/local/bin/windmill
 
-COPY --from=patcher /windmill/frontend/src/lib/hubPaths.json ${APP}/hubPaths.json
+COPY windmill-fork/frontend/src/lib/hubPaths.json ${APP}/hubPaths.json
 
 RUN windmill cache ${APP}/hubPaths.json && rm ${APP}/hubPaths.json
 

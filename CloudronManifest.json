@@ -3,7 +3,7 @@
   "title": "Windmill",
   "author": "Windmill Labs <contact@windmill.dev>",
   "version": "1.0.0",
-  "upstreamVersion": "1.690.0",
+  "upstreamVersion": "1.695.0",
   "description": "file://DESCRIPTION.md",
   "tagline": "Open-source developer platform to build production-grade workflows and UIs from scripts.",
   "healthCheckPath": "/",

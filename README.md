@@ -50,8 +50,8 @@ This package runs Windmill as a single container with 6 supervised processes:
 
 - **Automatic Cloudron SSO** — OIDC credentials are injected on every boot; the "Cloudron" login button appears automatically
 - **Automatic email** — Cloudron's SMTP infrastructure is configured on every boot; email notifications work out of the box
-- **No artificial limits** — workspace, group, and SSO user caps are removed via patches
-- **Full OAuth login flow** — restored from the open-source `windmill-oauth` crate
+- **No artificial limits** — workspace, group, and SSO user caps are removed
+- **Full OAuth login flow** — restored from the open-source `windmill-oauth` crate in our fork
 - **Audit logging** — restored for compliance and debugging
 - **User management** — setup wizard, password management, and workspace auto-invite all work
 
@@ -76,31 +76,32 @@ Package management: `uv` (Python), `npm` (Node.js), `composer` (PHP).
 - **Memory limit:** 4 GB (set in `CloudronManifest.json`)
 - **Storage:** grows with scripts, flows, job logs, and the embedded database
 
-## What's Patched
+## What's Modified
 
-This package applies 8 patches to the Windmill OSS source to restore functionality that was moved behind the Enterprise Edition paywall in June 2025:
+This package maintains a [fork of Windmill](https://github.com/halecraft/windmill) with modifications to restore functionality moved behind the Enterprise Edition paywall in June 2025. Changes are managed as a stack of [jj](https://jj-vcs.github.io/jj/) changes on a `cloudron` bookmark:
 
-| Patch | What it does |
+| Modification | What it does |
 |---|---|
-| `001-remove-limits` | Removes workspace (2) and group (3) caps |
-| `002-restore-oauth` | Restores OAuth login flow; removes SSO user limit (10) |
-| `003-restore-audit-logs` | Restores audit log recording and querying |
-| `004-implement-email` | Implements email sending via SMTP |
-| `005-remove-sso-limit-banner` | Removes misleading "Limited to 10 SSO users" frontend banner |
-| `006-fix-openrouter-default-model` | Fixes default AI model for OpenRouter |
-| `007-implement-user-mgmt` | Restores user creation, password hashing, setup wizard |
-| `008-implement-workspace-auto-invite` | Restores workspace auto-invite settings |
+| Restore audit logs | Audit log recording, querying, and listing |
+| Implement email | SMTP email sending via the `mail-send` crate |
+| Implement user management | User creation, password hashing, setup wizard |
+| Workspace auto-invite | Workspace auto-invite settings endpoint |
+| Restore OAuth + fix OpenRouter | Full OAuth login flow; fixes default AI model |
+| Remove limits + banners | Removes workspace (2), group (3), SSO user (10) caps and frontend banner |
+| Version string | Honest `X.Y.Z-cloudron` version instead of upstream git tag |
 
-See [`patches/README.md`](patches/README.md) for detailed descriptions of each patch, and [`TECHNICAL.md`](TECHNICAL.md) for the full patching strategy and rules for writing new patches.
+See [`TECHNICAL.md`](TECHNICAL.md) for the full fork architecture and modification rules.
 
 ## Updating Windmill
 
-See the [How to Update Windmill](TECHNICAL.md#how-to-update-windmill) section in `TECHNICAL.md` for the full procedure. The short version:
+See [How to Update Windmill](TECHNICAL.md#9-how-to-update-windmill) in `TECHNICAL.md`. The short version:
 
-1. Update the windmill submodule to the new tag
-2. Re-apply and fix patches
-3. Update `upstreamVersion` in `CloudronManifest.json`
+1. Fetch upstream: `cd windmill-fork && jj git fetch --remote upstream`
+2. Rebase: `jj rebase -b cloudron -d v<new_version>`
+3. Resolve conflicts, update `CloudronManifest.json`
 4. `cloudron build && cloudron update`
+
+The version string (`X.Y.Z-cloudron`) updates automatically on rebase.
 
 ## Backup & Data
 
