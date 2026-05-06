@@ -206,6 +206,7 @@ Docker build context (~490MB saving).
 | Remove EE frontend labels + sidebar entries | Remove "(EE)" labels, disabled states, non-functional sidebar entries (Kafka, NATS, SQS, GCP, Azure triggers), and settings panes from frontend | many `*.svelte`, `*.ts` |
 | enterpriseLicense store override | Set `enterpriseLicense` store to synthetic `'cloudron'` value at hydration — belt-and-suspenders catch-all for any remaining `{#if $enterpriseLicense}` checks | `enterpriseUtils.ts` |
 | Remove upstream version check from login | Remove `Uptodate` component from login page header — it calls GitHub releases API which fails behind Cloudron reverse proxy and is semantically wrong for a fork | `LoginPageHeader.svelte` |
+| Clean up initial setup wizard | Remove license key from all settings pages; remove job isolation toggle from setup wizard (only "None" works in Cloudron); remove 30-day retention period cap | `InstanceSettings.svelte`, `instanceSettings.ts`, `instance_config.rs` |
 
 ### Writing New Modifications — Rules
 
@@ -561,6 +562,7 @@ declaration regardless of the build host.
 | Feature | Reason |
 |---------|--------|
 | nsjail sandbox | Not included in this build. Workers detect `NSJAIL_AVAILABLE` at runtime and run scripts without sandboxing. Cloudron provides container-level isolation. |
+| Job isolation (Unshare/Nsjail) | Cloudron containers lack `CAP_SYS_ADMIN` and unprivileged user namespace support required by `unshare`. The worker self-test fails at startup and silently falls back to no isolation. The job isolation toggle is hidden from the initial setup wizard; the full settings page still shows it for advanced users. |
 | High availability / multi-node | Single-instance architecture — no distributed workers |
 | Multiplayer editing | Requires a separate collaboration service not shipped in this build |
 | Git sync | Implementation is in the upstream private repository |

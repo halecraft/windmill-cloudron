@@ -115,4 +115,20 @@ else
     echo "CLOUDRON_MAIL_SMTP_SERVER not set — skipping SMTP injection."
 fi
 
+# ---------------------------------------------------------------------------
+# Email domain injection
+# ---------------------------------------------------------------------------
+if [ -n "${CLOUDRON_MAIL_DOMAIN:-}" ]; then
+    echo "Injecting email domain from Cloudron..."
+    gosu postgres psql -d "$DB_NAME" -c "
+        INSERT INTO global_settings (name, value)
+        VALUES ('email_domain', '\"${CLOUDRON_MAIL_DOMAIN}\"'::jsonb)
+        ON CONFLICT (name) DO UPDATE
+        SET value = EXCLUDED.value;
+    "
+    echo "Email domain set to ${CLOUDRON_MAIL_DOMAIN}."
+else
+    echo "CLOUDRON_MAIL_DOMAIN not set — skipping email domain injection."
+fi
+
 echo "=== Credential injection complete ==="
