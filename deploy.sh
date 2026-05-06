@@ -114,7 +114,12 @@ if [[ "$FLAG_REINSTALL" == true ]]; then
     confirm "This will DESTROY ALL DATA at $CLOUDRON_APP. Continue?"
 
     log "Uninstalling $CLOUDRON_APP..."
-    cloudron uninstall --app "$CLOUDRON_APP"
+    if cloudron uninstall --app "$CLOUDRON_APP" 2>&1; then
+        log "Uninstall complete."
+    else
+        warn "Nothing to uninstall at $CLOUDRON_APP (app may not be installed)."
+        confirm "Install fresh at $CLOUDRON_APP anyway?"
+    fi
 
     log "Installing fresh at $CLOUDRON_APP..."
     cloudron install -l "$CLOUDRON_APP"

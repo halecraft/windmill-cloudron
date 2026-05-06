@@ -202,8 +202,10 @@ Docker build context (~490MB saving).
 | Remove limits + banners | Remove workspace (2), group (3), SSO user (10) caps; remove frontend banner | `workspaces.rs`, `groups.rs`, `oauth2_oss.rs`, `AuthSettings.svelte` |
 | Version string | Replace `git_version!()` with `CARGO_PKG_VERSION`-cloudron | `utils.rs` |
 | S3 object storage helpers | Workspace file browser, multipart upload, job S3 access, file download/delete/move | `job_helpers_oss.rs`, `job_s3_helpers_oss.rs`, `StorageSettings.svelte` |
-| Deduplicate service-account helpers | Shared email format, username validation, token issuance for service accounts | `service_accounts.rs`, `workspaces_oss.rs`, `users_oss.rs` (windmill-api-users) |
-| Restore OSS functionality | Ungate working code paths (restart flow, mute error handler, schedule hooks, critical alerts, admins-workspace, BigQuery/MSSQL/OracleDB); neutralize EE error strings in stubs; implement service accounts, critical alerts producer, AI docs retrieval; hide non-functional sidebar entries and settings panes; set enterpriseLicense store to synthetic value | many `*_oss.rs`, `*.svelte`, `enterpriseUtils.ts`, `inkeep_oss.rs`, `inkeep/corpus.json` |
+| Ungate + implement backend features | Remove `#[cfg(feature = "enterprise")]` guards from working code paths (restart flow, mute error handler, schedule hooks, critical alerts, admins-workspace, BigQuery/MSSQL/OracleDB); neutralize EE error strings in stubs; implement service accounts, critical alerts producer, AI docs retrieval; deduplicate service-account helpers | many `*_oss.rs`, `ee_oss.rs`, `monitor.rs`, `worker.rs`, `service_accounts.rs`, `inkeep_oss.rs`, `inkeep/corpus.json`, `Cargo.toml` |
+| Remove EE frontend labels + sidebar entries | Remove "(EE)" labels, disabled states, non-functional sidebar entries (Kafka, NATS, SQS, GCP, Azure triggers), and settings panes from frontend | many `*.svelte`, `*.ts` |
+| enterpriseLicense store override | Set `enterpriseLicense` store to synthetic `'cloudron'` value at hydration — belt-and-suspenders catch-all for any remaining `{#if $enterpriseLicense}` checks | `enterpriseUtils.ts` |
+| Remove upstream version check from login | Remove `Uptodate` component from login page header — it calls GitHub releases API which fails behind Cloudron reverse proxy and is semantically wrong for a fork | `LoginPageHeader.svelte` |
 
 ### Writing New Modifications — Rules
 
@@ -577,6 +579,14 @@ declaration regardless of the build host.
 - **PostgreSQL major-version upgrades** — if upgrading from an older installation that used
   PostgreSQL 14, the data directory format is incompatible with PostgreSQL 16. A manual
   `pg_upgrade` is required. New installations start with PostgreSQL 16 and are unaffected.
+
+- **Upstream version check removed from login page** — the `Uptodate` component was removed from
+  `LoginPageHeader.svelte` because it calls GitHub’s releases API (`api.github.com`), which fails
+  behind Cloudron’s reverse proxy (rendering garbled HTML text on the login page) and is
+  semantically wrong for a fork (our version `1.695.0-cloudron` never matches upstream tags). The
+  component still appears in the Superadmin Settings page (`SuperadminSettingsInner.svelte`), where
+  the failure is non-critical (user is already logged in, text overflow is contained in a settings
+  pane).
 
 ---
 
